@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Физическая Песочница</title>
+<style>
+html,body{margin:0;padding:0;background:#111;width:100%;height:100%;overflow:hidden;font-family:Arial,sans-serif}
+
+/* Всё в одном flex-контейнере */
+#wrap{display:flex;flex-direction:column;width:100vw;height:100vh}
+
+/* Верхняя панель */
+#top{display:flex;align-items:center;gap:6px;padding:6px 8px;
+  background:#1e1530;border-bottom:1px solid #333;flex-shrink:0;flex-wrap:wrap}
+#top button{background:#2a2040;border:1px solid #555;color:#ddd;
+  border-radius:6px;padding:5px 10px;font-size:13px;cursor:pointer}
+#top button:hover{background:#3a3060}
+#top button.on{background:#553300;border-color:#ff6600;color:#ffa}
+#obj-count{margin-left:auto;color:#666;font-size:12px}
+
+/* Основная область = тулбар + canvas */
+#main{display:flex;flex:1;overflow:hidden}
+
+/* Левый тулбар */
+#tools{display:flex;flex-direction:column;gap:4px;padding:6px 4px;
+  background:#1e1530;border-right:1px solid #333;width:68px;flex-shrink:0;
+  overflow-y:auto}
+.tb{width:60px;height:50px;border-radius:8px;border:2px solid #444;
+  background:#2a2040;color:#ccc;font-size:20px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:1px;flex-shrink:0}
+.tb:hover{background:#3a3060;border-color:#666}
+.tb.sel{border-color:#ff6600;background:#3a1800;color:#fff}
+.tb small{font-size:9px;color:#888;line-height:1}
+.tb.sel small{color:#ffa}
+hr.sep{border:none;border-top:1px solid #333;margin:2px 0}
+
+/* Canvas-обёртка */
+#cbox{flex:1;position:relative;overflow:hidden}
+canvas{display:block;width:100%;height:100%}
+
+/* Подсказка */
+#tip{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.7);color:#aaa;font-size:11px;
+  padding:4px 12px;border-radius:12px;pointer-events:none;white-space:nowrap}
+</style>
+</head>
+<body>
+<div id="wrap">
+
+  <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
+  <div id="top">
+    <button id="bPause">⏸ Пауза</button>
+    <button id="bClear">🗑 Очистить</button>
+    <button id="bGrav">🌍 Гравитация</button>
+    <button id="bWind">💨 Ветер: Выкл</button>
+    <span id="obj-count">Объектов: 0</span>
+  </div>
+
+  <div id="main">
+
+    <!-- ИНСТРУМЕНТЫ -->
+    <div id="tools">
+      <div class="tb sel" data-t="human">🧍<small>Чел.</small></div>
+      <div class="tb" data-t="box">📦<small>Ящик</small></div>
+      <div class="tb" data-t="ball">🔵<small>Мяч</small></div>
+      <div class="tb" data-t="anvil">⚫<small>Гиря</small></div>
+      <div class="tb" data-t="bomb">💣<small>Бомба</small></div>
+      <div class="tb" data-t="fire">🔥<small>Огонь</small></div>
+      <div class="tb" data-t="spike">⚡<small>Шипы</small></div>
+      <div class="tb" data-t="spring">🌀<small>Пруж.</small></div>
+      <hr class="sep">
+      <div class="tb" data-t="gun">🔫<small>Пист.</small></div>
+      <div class="tb" data-t="rocket">🚀<small>Ракета</small></div>
+      <hr class="sep">
+      <div class="tb" data-t="platform">🟫<small>Плат.</small></div>
+      <div class="tb" data-t="erase">🧹<small>Удал.</small></div>
+      <div class="tb" data-t="drag">✋<small>Тяга</small></div>
+    </div>
+
+    <!-- ХОЛСТ -->
+    <div id="cbox">
+      <canvas id="c"></canvas>
+      <div id="tip">Выбери инструмент и кликни на поле</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ── Canvas ──
+const cv  = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const box = document.getElementById('cbox');
+
+function resize(){
+  cv.width  = box.clientWidth;
+  cv.height = box.clientHeight;
+  GY = cv.height - 36;
+}
+let GY = 0;
+resize();
+window.addEventListener('resize', resize);
+
+// ── Состояние ──
+let tool    = 'human';
+let paused  = false;
+let gravity = 0.45;
+let wind    = 0;
+let frame   = 0;
+let objs    = [];
+let parts   = [];
+let dragObj = null, dragDX = 0, dragDY = 0;
+let shakeX  = 0, shakeY = 0, shakePow = 0;
+
+// ── Выбор инструмента ──
+document.querySelectorAll('.tb').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.tb').forEach(x => x.classList.remove('sel'));
+    b.classList.add('sel');
+    tool = b.dataset.t;
+    document.getElementById('tip').textContent = TIPS[tool] || '';
+  });
+});
+
+const TIPS = {
+  human:'Кликни — создать человечка',
+  box:'Кликни — создать ящик',
+  ball:'Кликни — создать мяч',
+  anvil:'Кликни — сбросить тяжёлую гирю',
+  bomb:'Кликни — поставить бомбу (взрывается при ударе)',
+  fire:'Кликни — поджечь (распространяется)',
+  spike:'Кликни — поставить шипы (убивают людей)',
+  spring:'Кликни — пружина (подбрасывает вверх)',
+  gun:'Кликни — выстрел в сторону курсора',
+  rocket:'Кликни — запустить ракету (большой взрыв)',
+  platform:'Кликни — неподвижная платформа',
+  erase:'Кликни на объект — удалить',
+  drag:'Удерживай и тяни объекты',
+};
+
+// ── Кнопки панели ──
+document.getElementById('bPause').addEventListener('click', () => {
+  paused = !paused;
+  document.getElementById('bPause').textContent = paused ? '▶ Играть' : '⏸ Пауза';
+});
+document.getElementById('bClear').addEventListener('click', () => { objs = []; parts = []; });
+document.getElementById('bGrav').addEventListener('click', () => {
+  gravity = gravity > 0 ? -0.3 : 0.45;
+  document.getElementById('bGrav').textContent = gravity > 0 ? '🌍 Гравитация' : '🌌 Антигравит.';
+});
+let windOn = false;
+document.getElementById('bWind').addEventListener('click', () => {
+  windOn = !windOn; wind = windOn ? 0.12 : 0;
+  document.getElementById('bWind').classList.toggle('on', windOn);
+  document.getElementById('bWind').textContent = windOn ? '💨 Ветер: Вкл' : '💨 Ветер: Выкл';
+});
+document.addEventListener('keydown', e => {
+  if(e.code === 'Space'){ e.preventDefault(); document.getElementById('bPause').click(); }
+});
+
+// ════════════════════════════════════
+//  ФИЗИЧЕСКИЕ ОБЪЕКТЫ
+// ════════════════════════════════════
+let UID = 0;
+class Obj {
+  constructor(x,y,w,h,o={}){
+    this.id   = UID++;
+    this.x=x; this.y=y; this.w=w; this.h=h;
+    this.vx   = o.vx||0;
+    this.vy   = o.vy||0;
+    this.mass = o.mass||1;
+    this.rest = o.rest||0.35;
+    this.fric = o.fric||0.82;
+    this.fixed= o.fixed||false;
+    this.hp   = o.hp!=null ? o.hp : 100;
+    this.maxHp= this.hp;
+    this.type = o.type||'box';
+    this.col  = o.col||'#888';
+    this.ang  = 0;
+    this.avel = 0;
+    this.alive= true;
+    this.onFire=false;
+    this.fireTick=0;
+    this.age  = 0;
+  }
+  get L(){ return this.x - this.w/2; }
+  get R(){ return this.x + this.w/2; }
+  get T(){ return this.y - this.h/2; }
+  get B(){ return this.y + this.h/2; }
+
+  step(){
+    if(this.fixed || !this.alive) return;
+    this.age++;
+    this.vy += gravity / this.mass;
+    this.vx += wind / this.mass;
+    this.vx *= 0.994;
+    this.x  += this.vx;
+    this.y  += this.vy;
+    this.ang += this.avel;
+    this.avel *= 0.94;
+    // пол
+    if(this.B >= GY){
+      this.y  = GY - this.h/2;
+      this.vy *= -this.rest;
+      this.vx *= this.fric;
+      this.avel *= 0.65;
+      if(Math.abs(this.vy)<0.4) this.vy=0;
+    }
+    // стены
+    if(this.L < 0)        { this.x = this.w/2;        this.vx *= -this.rest; }
+    if(this.R > cv.width) { this.x = cv.width-this.w/2; this.vx *= -this.rest; }
+    if(this.T < 0)        { this.y = this.h/2;         this.vy *= -0.4; }
+    // огонь
+    if(this.onFire){
+      this.fireTick++;
+      if(this.fireTick%3===0) addPart(new FPart(this.x, this.T));
+      if(this.type==='human'||this.type==='box'){
+        this.hp -= 0.25;
+        if(this.hp<=0) this.kill();
+      }
+    }
+  }
+  kill(){
+    this.alive = false;
+    boom(this.x, this.y, this.col, 8);
+  }
+  hit(dmg, fx=0, fy=0){
+    this.hp -= dmg;
+    this.vx += fx; this.vy += fy;
+    this.avel += (Math.random()-.5)*.3;
+    if(this.hp<=0) this.kill();
+  }
+}
+
+// ── Рисование типов ──
+function drawObj(o){
+  if(!o.alive) return;
+  ctx.save();
+  ctx.translate(o.x, o.y);
+  ctx.rotate(o.ang);
+
+  if(o.type==='human')    drawHuman(o);
+  else if(o.type==='ball')drawBall(o);
+  else if(o.type==='anvil')drawAnvil(o);
+  else if(o.type==='spike')drawSpike(o);
+  else if(o.type==='spring')drawSpring(o);
+  else if(o.type==='bomb') drawBomb(o);
+  else if(o.type==='bullet')drawBullet(o);
+  else if(o.type==='rkt')  drawRkt(o);
+  else                     drawBox(o);   // box, platform, fire_src
+
+  // HP-бар (не для платформ и шипов)
+  if(o.hp < o.maxHp && o.hp > 0 && !o.fixed){
+    const bw=o.w, bh=4;
+    ctx.fillStyle='rgba(0,0,0,.5)';
+    ctx.fillRect(-bw/2, -o.h/2-8, bw, bh);
+    ctx.fillStyle = o.hp/o.maxHp > .5 ? '#44dd44' : o.hp/o.maxHp > .25 ? '#ddcc22' : '#dd2222';
+    ctx.fillRect(-bw/2, -o.h/2-8, bw*(o.hp/o.maxHp), bh);
+  }
+  ctx.restore();
+}
+
+function drawBox(o){
+  const c = o.onFire ? '#c03010' : o.col;
+  ctx.fillStyle = c;
+  ctx.beginPath(); ctx.roundRect(-o.w/2,-o.h/2,o.w,o.h,3); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.roundRect(-o.w/2,-o.h/2,o.w,o.h,3); ctx.stroke();
+  if(o.type==='box'){
+    ctx.strokeStyle='rgba(0,0,0,.18)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(-o.w/2,0); ctx.lineTo(o.w/2,0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-o.h/2); ctx.lineTo(0,o.h/2); ctx.stroke();
+  }
+}
+
+function drawHuman(o){
+  const ph = o.age*.15;
+  const rag = o.hp < o.maxHp*.6;
+  const bc  = o.onFire ? '#d04010' : '#f4a261';
+  // ноги
+  ctx.strokeStyle='#8b4513'; ctx.lineWidth=4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-4,10); ctx.lineTo(-6+Math.sin(ph)*6*(rag?0:1), 22); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo( 4,10); ctx.lineTo( 6-Math.sin(ph)*6*(rag?0:1), 22); ctx.stroke();
+  // руки
+  ctx.strokeStyle=bc; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(-6,-2); ctx.lineTo(-14+Math.sin(ph)*5*(rag?0:1),-10); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo( 6,-2); ctx.lineTo( 14-Math.sin(ph)*5*(rag?0:1),-10); ctx.stroke();
+  // тело
+  ctx.fillStyle=bc;
+  ctx.beginPath(); ctx.roundRect(-7,-12,14,24,3); ctx.fill();
+  // голова
+  ctx.fillStyle='#ffe4c4';
+  ctx.beginPath(); ctx.arc(0,-20,9,0,Math.PI*2); ctx.fill();
+  // глаза
+  ctx.fillStyle = rag ? '#888' : '#222';
+  ctx.fillRect(-4,-22,3,3); ctx.fillRect(2,-22,3,3);
+  if(!rag){
+    ctx.fillStyle='#e44'; ctx.beginPath(); ctx.arc(0,-16,2,0,Math.PI); ctx.fill();
+  }
+}
+
+function drawBall(o){
+  const r = o.w/2;
+  const g = ctx.createRadialGradient(-r*.3,-r*.3,1,0,0,r);
+  const c = o.onFire?'#ff4400':o.col;
+  g.addColorStop(0, ltn(c,50)); g.addColorStop(1, c);
+  ctx.fillStyle=g;
+  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.12)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2); ctx.stroke();
+}
+
+function drawAnvil(o){
+  ctx.fillStyle='#555';
+  ctx.beginPath(); ctx.roundRect(-18,-14,36,28,4); ctx.fill();
+  ctx.fillStyle='#666';
+  ctx.beginPath(); ctx.roundRect(-14,-20,28,10,3); ctx.fill();
+  ctx.fillStyle='#777';
+  ctx.fillRect(-6,-6,12,20);
+}
+
+function drawSpike(o){
+  ctx.fillStyle='#999';
+  for(let i=-1;i<=1;i++){
+    ctx.beginPath();
+    ctx.moveTo(i*12-5,10); ctx.lineTo(i*12,-12); ctx.lineTo(i*12+5,10);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle='#777';
+  ctx.fillRect(-18,8,36,6);
+}
+
+function drawSpring(o){
+  const h = 30 - (o.compressed||0)*8;
+  ctx.strokeStyle='#60c0ff'; ctx.lineWidth=3; ctx.lineCap='round';
+  ctx.beginPath();
+  for(let i=0;i<=40;i++){
+    const t=i/40;
+    const px=Math.sin(t*Math.PI*2*5)*8;
+    const py=-h/2+t*h;
+    i===0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  ctx.fillStyle='#4499cc';
+  ctx.fillRect(-12,h/2-3,24,5);
+}
+
+function drawBomb(o){
+  ctx.fillStyle='#2a2a2a';
+  ctx.beginPath(); ctx.arc(0,0,11,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#444';
+  ctx.beginPath(); ctx.arc(-3,-3,4,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#8b7355'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(3,-11); ctx.quadraticCurveTo(10,-19,8,-24); ctx.stroke();
+  if(o.fuseOn){
+    if(Math.sin(frame*.5)>.2){
+      ctx.fillStyle='#ffdd00';
+      ctx.beginPath(); ctx.arc(8,-24,3,0,Math.PI*2); ctx.fill();
+    }
+    const p=o.fuse/180;
+    ctx.strokeStyle=`hsl(${p*120},80%,50%)`; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(0,0,14,-Math.PI/2,-Math.PI/2+p*Math.PI*2); ctx.stroke();
+  }
+}
+
+function drawBullet(o){
+  if(!o.alive) return;
+  for(let i=0;i<o.trail.length;i++){
+    ctx.globalAlpha=(i/o.trail.length)*.4;
+    ctx.fillStyle='#ffaa00';
+    ctx.beginPath(); ctx.arc(o.trail[i].x-o.x,o.trail[i].y-o.y,2,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  ctx.fillStyle='#ffe066';
+  ctx.beginPath(); ctx.arc(0,0,4,0,Math.PI*2); ctx.fill();
+}
+
+function drawRkt(o){
+  if(!o.alive) return;
+  for(let i=0;i<o.trail.length;i++){
+    const a=i/o.trail.length;
+    ctx.globalAlpha=a*.5;
+    ctx.fillStyle=`hsl(30,90%,${35+a*20}%)`;
+    ctx.beginPath(); ctx.arc(o.trail[i].x-o.x,o.trail[i].y-o.y,(1-a)*5+1,0,Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  const ang=Math.atan2(o.vy,o.vx);
+  ctx.rotate(ang - o.ang); // компенсируем внешний rotate
+  ctx.fillStyle='#ff6633';
+  ctx.beginPath(); ctx.moveTo(10,0); ctx.lineTo(-6,-5); ctx.lineTo(-6,5); ctx.closePath(); ctx.fill();
+}
+
+// ── Создание объектов ──
+function spawn(x, y){
+  switch(tool){
+    case 'human': {
+      const o=new Obj(x,y,18,40,{type:'human',col:'#f4a261',hp:100,vx:(Math.random()-.5)*2});
+      objs.push(o); break;
+    }
+    case 'box': {
+      const s=26+Math.random()*18;
+      objs.push(new Obj(x,y,s,s,{type:'box',col:'#c8a060',rest:.3})); break;
+    }
+    case 'ball': {
+      const r=12+Math.random()*8;
+      const o=new Obj(x,y,r*2,r*2,{type:'ball',col:'#4488ff',rest:.7,fric:.9,vx:(Math.random()-.5)*3});
+      o.isCircle=true; objs.push(o); break;
+    }
+    case 'anvil':
+      objs.push(new Obj(x,y,36,28,{type:'anvil',col:'#444',mass:5,rest:.1,fric:.6})); break;
+    case 'bomb': {
+      const o=new Obj(x,y,22,22,{type:'bomb',col:'#333',rest:.4,hp:1});
+      o.fuse=180; o.fuseOn=false;
+      o.step=function(){
+        Obj.prototype.step.call(this);
+        if(this.fuseOn){ this.fuse--; if(this.fuse<=0) explodeBomb(this); }
+        if(Math.abs(this.vx)>1.5||Math.abs(this.vy)>2) this.fuseOn=true;
+        if(this.B>=GY-1&&Math.abs(this.vy)<0.5) this.fuseOn=true;
+      };
+      objs.push(o); break;
+    }
+    case 'fire': {
+      const o=new Obj(x,y,20,20,{type:'fire_src',col:'#ff6600',fixed:false,hp:999});
+      o.step=function(){
+        Obj.prototype.step.call(this);
+        if(frame%3===0) addPart(new FPart(this.x,this.y));
+      };
+      objs.push(o); break;
+    }
+    case 'spike':
+      objs.push(new Obj(x,y,36,20,{type:'spike',col:'#999',fixed:true,hp:999})); break;
+    case 'spring': {
+      const o=new Obj(x,y,20,32,{type:'spring',col:'#60c0ff',fixed:true,hp:999});
+      o.compressed=0; objs.push(o); break;
+    }
+    case 'platform':
+      objs.push(new Obj(x,y,110+Math.random()*70,14,{type:'platform',col:'#6b4423',fixed:true,hp:999})); break;
+    case 'gun': fireGun(x,y); break;
+    case 'rocket': fireRocket(x,y); break;
+    case 'erase': eraseAt(x,y); break;
+  }
+}
+
+function fireGun(tx,ty){
+  const sx=cv.width/2, sy=cv.height/2;
+  const dx=tx-sx, dy=ty-sy, len=Math.sqrt(dx*dx+dy*dy)||1;
+  const o=new Obj(sx,sy,8,8,{type:'bullet',col:'#ffe',mass:.1,rest:.1,hp:3,vy:0});
+  o.vx=dx/len*13; o.vy=dy/len*13; o.trail=[];
+  const origStep=Obj.prototype.step.bind(o);
+  o.step=function(){
+    this.trail.push({x:this.x,y:this.y});
+    if(this.trail.length>8) this.trail.shift();
+    origStep(); this.age++;
+    if(this.age>130) this.alive=false;
+  };
+  objs.push(o);
+}
+
+function fireRocket(tx,ty){
+  const sx=cv.width/2, sy=cv.height/2;
+  const dx=tx-sx, dy=ty-sy, len=Math.sqrt(dx*dx+dy*dy)||1;
+  const o=new Obj(sx,sy,12,12,{type:'rkt',col:'#ff6633',mass:.2,hp:1});
+  o.vx=dx/len*9; o.vy=dy/len*9; o.trail=[];
+  o.step=function(){
+    if(!this.alive) return;
+    this.vy += gravity*.08;
+    this.trail.push({x:this.x,y:this.y});
+    if(this.trail.length>14) this.trail.shift();
+    this.x+=this.vx; this.y+=this.vy; this.age++;
+    if(this.age>220||this.B>GY||this.x<0||this.x>cv.width) explodeRocket(this);
+  };
+  objs.push(o);
+}
+
+function eraseAt(x,y){
+  for(let i=objs.length-1;i>=0;i--){
+    const o=objs[i];
+    if(Math.abs(o.x-x)<o.w&&Math.abs(o.y-y)<o.h){ objs.splice(i,1); return; }
+  }
+}
+
+function explodeBomb(o){
+  if(!o.alive) return; o.alive=false;
+  boom(o.x,o.y,'#ff8800',18);
+  blastWave(o.x,o.y,95,5);
+  shake(6,15);
+}
+function explodeRocket(o){
+  if(!o.alive) return; o.alive=false;
+  boom(o.x,o.y,'#ff6633',24);
+  blastWave(o.x,o.y,130,8);
+  shake(9,22);
+}
+function blastWave(bx,by,rad,force){
+  for(const o of objs){
+    if(!o.alive||o.fixed) continue;
+    const dx=o.x-bx, dy=o.y-by, d=Math.sqrt(dx*dx+dy*dy);
+    if(d<rad&&d>0){
+      const f=(rad-d)/rad*force;
+      o.vx+=dx/d*f; o.vy+=dy/d*f-2;
+      o.avel+=(Math.random()-.5)*.4;
+      if(o.type==='human') o.hit(55,dx/d*f,dy/d*f-2);
+      else o.hp-=65;
+    }
+  }
+}
+
+// ── Столкновения ──
+function collide(){
+  for(let i=0;i<objs.length;i++){
+    const a=objs[i]; if(!a.alive) continue;
+    for(let j=i+1;j<objs.length;j++){
+      const b=objs[j]; if(!b.alive) continue;
+      if(a.fixed&&b.fixed) continue;
+      if(a.R<=b.L||b.R<=a.L||a.B<=b.T||b.B<=a.T) continue;
+
+      const dx=b.x-a.x, dy=b.y-a.y;
+      const px=(a.w/2+b.w/2)-Math.abs(dx);
+      const py=(a.h/2+b.h/2)-Math.abs(dy);
+
+      let nx,ny,pen;
+      if(px<py){ nx=dx>0?1:-1; ny=0; pen=px; }
+      else      { nx=0; ny=dy>0?1:-1; pen=py; }
+
+      const af=b.fixed?1:0.5, bf=a.fixed?1:0.5;
+      if(!a.fixed){ a.x-=nx*pen*af; a.y-=ny*pen*af; }
+      if(!b.fixed){ b.x+=nx*pen*bf; b.y+=ny*pen*bf; }
+
+      const rvx=a.vx-b.vx, rvy=a.vy-b.vy;
+      const rv=rvx*nx+rvy*ny;
+      if(rv>0) continue;
+      const e=(a.rest+b.rest)/2;
+      const imp=rv*(1+e)/(1/a.mass+1/b.mass);
+      if(!a.fixed){ a.vx-=nx*imp/a.mass; a.vy-=ny*imp/a.mass; }
+      if(!b.fixed){ b.vx+=nx*imp/b.mass; b.vy+=ny*imp/b.mass; }
+
+      // спецэффекты столкновений
+      const spd=Math.abs(rv);
+      if(spd>5){
+        const dmg=(spd-5)*3;
+        if(a.type==='human') a.hit(dmg);
+        if(b.type==='human') b.hit(dmg);
+        if(a.type==='anvil'||b.type==='anvil') shake(3,8);
+      }
+      // пуля
+      if(a.type==='bullet'){ bulletHit(a,b); }
+      if(b.type==='bullet'){ bulletHit(b,a); }
+      // ракета
+      if(a.type==='rkt') explodeRocket(a);
+      if(b.type==='rkt') explodeRocket(b);
+      // огонь → поджигает
+      if((a.type==='fire_src'||a.onFire)&&!b.onFire&&b.type!=='spike'&&b.type!=='spring') b.onFire=true;
+      if((b.type==='fire_src'||b.onFire)&&!a.onFire&&a.type!=='spike'&&a.type!=='spring') a.onFire=true;
+      // шипы убивают людей
+      if(a.type==='spike'&&b.type==='human') b.hit(999);
+      if(b.type==='spike'&&a.type==='human') a.hit(999);
+      // пружина подбрасывает
+      if(a.type==='spring'&&!b.fixed){ b.vy=-13; a.compressed=1; setTimeout(()=>a.compressed=0,200); }
+      if(b.type==='spring'&&!a.fixed){ a.vy=-13; b.compressed=1; setTimeout(()=>b.compressed=0,200); }
+      // бомба активируется при ударе
+      if(a.type==='bomb'&&spd>2) a.fuseOn=true;
+      if(b.type==='bomb'&&spd>2) b.fuseOn=true;
+    }
+  }
+}
+
+function bulletHit(blt,tgt){
+  if(!blt.alive||!tgt.alive) return;
+  if(tgt.type==='bullet'||tgt.type==='rkt') return;
+  blt.hp--; if(blt.hp<=0) blt.alive=false;
+  boom(blt.x,blt.y,'#ffdd00',5);
+  if(tgt.type==='human') tgt.hit(25,blt.vx*.5,blt.vy*.5);
+  else { tgt.hp-=20; tgt.vx+=blt.vx*.3; tgt.vy+=blt.vy*.3; }
+  if(tgt.type==='bomb') tgt.fuseOn=true;
+}
+
+// ── Частицы ──
+class Part {
+  constructor(x,y,vx,vy,col,life,sz){
+    this.x=x;this.y=y;this.vx=vx;this.vy=vy;this.col=col;this.life=life;this.maxL=life;this.sz=sz;
+  }
+  step(){ this.vy+=gravity*.4; this.x+=this.vx; this.y+=this.vy; this.vx*=.97; this.life--;
+    if(this.y>GY){this.y=GY;this.vy*=-.25;this.vx*=.8;} return this.life>0; }
+  draw(){ ctx.globalAlpha=this.life/this.maxL;
+    ctx.fillStyle=this.col; const s=this.sz*(this.life/this.maxL);
+    ctx.beginPath(); ctx.arc(this.x,this.y,s,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+}
+class FPart {
+  constructor(x,y){ this.x=x; this.y=y;
+    this.vx=(Math.random()-.5)*1.5; this.vy=-1.5-Math.random()*2;
+    this.life=18+Math.random()*12; this.maxL=this.life; this.sz=4+Math.random()*4; }
+  step(){ this.x+=this.vx; this.y+=this.vy; this.vy-=.04; this.vx*=.95; this.life--; return this.life>0; }
+  draw(){ const a=this.life/this.maxL; ctx.globalAlpha=a*.8;
+    ctx.fillStyle=`hsl(${20+a*25},100%,${38+a*28}%)`;
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.sz*a,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1; }
+}
+function addPart(p){ parts.push(p); }
+function boom(x,y,col,n){
+  for(let i=0;i<n;i++){
+    const a=Math.random()*Math.PI*2, s=1+Math.random()*5;
+    parts.push(new Part(x,y,Math.cos(a)*s,Math.sin(a)*s-2,
+      i%2?col:'#fff',25+Math.random()*20,2+Math.random()*4));
+  }
+  for(let i=0;i<6;i++) parts.push(new FPart(x,y));
+}
+function shake(a,d){ shakePow=a; }
+
+// ── Мышь ──
+let mdown=false, lastSpawn=0;
+
+function evPos(e){
+  const r=cv.getBoundingClientRect();
+  if(e.touches) return {x:e.touches[0].clientX-r.left, y:e.touches[0].clientY-r.top};
+  return {x:e.clientX-r.left, y:e.clientY-r.top};
+}
+
+cv.addEventListener('pointerdown', e=>{
+  mdown=true; cv.setPointerCapture(e.pointerId);
+  const {x,y}=evPos(e);
+  if(tool==='drag'){ dragObj=findAt(x,y); if(dragObj){dragDX=x-dragObj.x;dragDY=y-dragObj.y;} return; }
+  spawn(x,y); lastSpawn=Date.now();
+});
+cv.addEventListener('pointermove', e=>{
+  if(!mdown) return;
+  const {x,y}=evPos(e);
+  if(tool==='drag'&&dragObj){ dragObj.x=x-dragDX; dragObj.y=y-dragDY; dragObj.vx=0; dragObj.vy=0; return; }
+  if(['fire','erase','platform'].includes(tool)&&Date.now()-lastSpawn>100){
+    spawn(x,y); lastSpawn=Date.now();
+  }
+});
+cv.addEventListener('pointerup',   ()=>{ mdown=false; dragObj=null; });
+cv.addEventListener('pointerleave',()=>{ mdown=false; dragObj=null; });
+
+function findAt(x,y){
+  for(let i=objs.length-1;i>=0;i--){
+    const o=objs[i];
+    if(Math.abs(o.x-x)<o.w&&Math.abs(o.y-y)<o.h) return o;
+  }
+  return null;
+}
+
+// ── Фон ──
+function drawBG(){
+  const g=ctx.createLinearGradient(0,0,0,cv.height);
+  g.addColorStop(0,'#0d0d1a'); g.addColorStop(1,'#1a1030');
+  ctx.fillStyle=g; ctx.fillRect(0,0,cv.width,cv.height);
+  // сетка
+  ctx.strokeStyle='rgba(255,255,255,.025)'; ctx.lineWidth=1;
+  for(let x=0;x<cv.width;x+=50){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,cv.height); ctx.stroke(); }
+  for(let y=0;y<cv.height;y+=50){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(cv.width,y); ctx.stroke(); }
+  // пол
+  ctx.fillStyle='#2d6a2d'; ctx.fillRect(0,GY,cv.width,4);
+  ctx.fillStyle='#3a2a1a'; ctx.fillRect(0,GY+4,cv.width,cv.height-GY-4);
+}
+
+// ── Главный цикл ──
+function ltn(h,a){ // lighten hex
+  let c=parseInt(h.replace('#',''),16)||0x888888;
+  return '#'+[c>>16&255,c>>8&255,c&255].map(v=>Math.min(255,v+a).toString(16).padStart(2,'0')).join('');
+}
+
+// Начальные платформы
+function initPlatforms(){
+  objs.push(new Obj(cv.width/2,   cv.height-100, 200,14,{type:'platform',col:'#6b4423',fixed:true,hp:999}));
+  objs.push(new Obj(cv.width/4,   cv.height-200, 120,14,{type:'platform',col:'#6b4423',fixed:true,hp:999}));
+  objs.push(new Obj(cv.width*.75, cv.height-180, 100,14,{type:'platform',col:'#6b4423',fixed:true,hp:999}));
+}
+
+function loop(){
+  frame++;
+  requestAnimationFrame(loop);
+
+  // тряска
+  if(shakePow>0){
+    shakeX=(Math.random()-.5)*shakePow;
+    shakeY=(Math.random()-.5)*shakePow;
+    shakePow*=.8; if(shakePow<.3) shakePow=0;
+  } else { shakeX=0; shakeY=0; }
+
+  ctx.save();
+  ctx.translate(shakeX,shakeY);
+  drawBG();
+
+  if(!paused){
+    for(const o of objs) o.step();
+    collide();
+    objs  = objs.filter(o=>o.alive);
+    parts = parts.filter(p=>p.step());
+  }
+
+  for(const p of parts) p.draw();
+
+  // рисуем: платформы → шипы → пружины → остальное → люди → снаряды
+  const order={platform:0,spike:1,spring:1,fire_src:2,box:3,ball:3,anvil:3,bomb:3,human:4,bullet:5,rkt:5};
+  objs.slice().sort((a,b)=>(order[a.type]||3)-(order[b.type]||3)).forEach(drawObj);
+
+  ctx.restore();
+
+  if(paused){
+    ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(0,0,cv.width,cv.height);
+    ctx.fillStyle='#fff'; ctx.font='bold 34px Arial'; ctx.textAlign='center';
+    ctx.fillText('⏸ ПАУЗА',cv.width/2,cv.height/2);
+    ctx.font='15px Arial'; ctx.fillStyle='rgba(255,255,255,.5)';
+    ctx.fillText('Нажми Пробел или «Играть»',cv.width/2,cv.height/2+36);
+    ctx.textAlign='left';
+  }
+
+  document.getElementById('obj-count').textContent=`Объектов: ${objs.length}`;
+}
+
+initPlatforms();
+loop();
+</script>
+</body>
+</html>
