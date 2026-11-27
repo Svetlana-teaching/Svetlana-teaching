@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ЗВЁЗДНЫЙ РЕЙД — Призрачный легион</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background: #000; overflow: hidden; font-family: 'Courier New', monospace; color: #fff; user-select: none; }
+  #wrap { position: absolute; inset: 0; display: flex; flex-direction: column; }
+  #view { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; background: #000; min-height: 0; }
+  #c { image-rendering: pixelated; image-rendering: crisp-edges; height: 100%; max-width: 100%; aspect-ratio: 16/9; object-fit: contain; }
+  #cross { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; pointer-events: none; }
+  #cross:before, #cross:after { content: ''; position: absolute; background: rgba(120,255,200,.8); }
+  #cross:before { left: 6px; top: 0; width: 2px; height: 14px; } #cross:after { top: 6px; left: 0; height: 2px; width: 14px; }
+  #flash { position: absolute; inset: 0; pointer-events: none; background: #ff2020; opacity: 0; }
+  #msg { position: absolute; top: 14px; left: 18px; font-size: 18px; font-weight: bold; text-shadow: 2px 2px 0 #000; color: #ffe46b; }
+
+  /* ---- Панель внизу в стиле старых шутеров ---- */
+  #bar { height: 92px; display: flex; gap: 6px; padding: 6px; background: linear-gradient(#3a3f4a, #23262d); border-top: 3px solid #5d6575; }
+  .box { background: #111318; border: 2px inset #4a5160; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 12px; min-width: 96px; }
+  .lbl { font-size: 11px; color: #8d96aa; letter-spacing: 2px; }
+  .num { font-size: 40px; font-weight: bold; color: #ff4b3a; text-shadow: 0 0 8px rgba(255,60,40,.6); line-height: 1; }
+  #face { width: 80px; min-width: 80px; padding: 0; }
+  #face canvas { width: 72px; height: 72px; image-rendering: pixelated; }
+  .wpn { display: flex; gap: 6px; font-size: 22px; font-weight: bold; }
+  .wpn span { color: #3a3f4a; } .wpn span.has { color: #c9d1e0; } .wpn span.cur { color: #ffd23a; text-shadow: 0 0 8px #ffd23a; }
+  .keys { display: flex; gap: 8px; } .key { width: 18px; height: 26px; border-radius: 3px; background: #22252c; border: 1px solid #333; }
+  .key.r.on { background: #ff3030; box-shadow: 0 0 10px #ff3030; } .key.b.on { background: #3a7bff; box-shadow: 0 0 10px #3a7bff; }
+  .grow { flex: 1; }
+  .small { font-size: 16px; color: #c9d1e0; }
+
+  /* ---- Экраны ---- */
+  .screen { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(ellipse at center, rgba(20,10,40,.88), rgba(0,0,0,.96)); text-align: center; padding: 20px; z-index: 5; }
+  .title { font-size: clamp(40px, 7vw, 84px); font-weight: 900; letter-spacing: 6px; color: #ffd23a; text-shadow: 0 0 20px #ff8a00, 4px 4px 0 #6a2a00; }
+  .sub { font-size: 20px; color: #9fd8ff; margin: 6px 0 24px; letter-spacing: 3px; }
+  .story { max-width: 680px; font-size: 16px; line-height: 1.6; color: #c9d1e0; margin-bottom: 22px; }
+  .btn { font-family: inherit; font-size: 24px; font-weight: bold; padding: 12px 46px; background: #ffd23a; color: #1a1000; border: none; cursor: pointer; box-shadow: 0 0 24px rgba(255,210,58,.6); margin: 6px; }
+  .btn:hover { background: #fff07a; }
+  .help { margin-top: 22px; font-size: 14px; color: #8d96aa; line-height: 1.8; }
+  .help b { color: #fff; border: 1px solid #555; padding: 0 6px; border-radius: 3px; }
+  .stats { font-size: 22px; line-height: 1.8; margin: 14px 0 20px; color: #fff; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="view">
+    <canvas id="c"></canvas>
+    <div id="cross"></div>
+    <div id="flash"></div>
+    <div id="msg"></div>
+
+    <div id="menu" class="screen">
+      <div class="title">ЗВЁЗДНЫЙ РЕЙД</div>
+      <div class="sub">ПРИЗРАЧНЫЙ ЛЕГИОН</div>
+      <div class="story">Призрачный легион — армия пустых белых доспехов, которые оживила древняя энергия. Легион захватил станцию «Орион» и рвётся к другим мирам. Ты — пилот-разведчик. Пройди ангар, вулканическую шахту и храм в джунглях, проникни на крейсер «Призрак» и победи Владыку Легиона.</div>
+      <button class="btn" id="startBtn">НАЧАТЬ МИССИЮ</button>
+      <div class="help">
+        <b>W A S D</b> / <b>стрелки</b> — ходить &nbsp; <b>мышь</b> — поворот (кликни по экрану)<br>
+        <b>ЛКМ</b> / <b>ПРОБЕЛ</b> — стрелять &nbsp; <b>1 2 3</b> — оружие &nbsp; <b>SHIFT</b> — бег<br>
+        <b>TAB</b> — карта &nbsp; <b>M</b> — звук &nbsp; двери открываются сами, цветным нужны ключи
+      </div>
+    </div>
+
+    <div id="between" class="screen hidden">
+      <div class="title" id="bTitle">УРОВЕНЬ ПРОЙДЕН</div>
+      <div class="stats" id="bStats"></div>
+      <button class="btn" id="nextBtn">ДАЛЕЕ</button>
+    </div>
+  </div>
+
+  <div id="bar">
+    <div class="box"><div class="lbl">УРОВЕНЬ</div><div class="num" id="hLevel">1</div></div>
+    <div class="box"><div class="lbl">ЗАРЯД</div><div class="num" id="hAmmo">∞</div></div>
+    <div class="box"><div class="lbl">ЗДОРОВЬЕ</div><div class="num" id="hHp">100%</div></div>
+    <div class="box" id="face"><canvas id="faceC" width="24" height="24"></canvas></div>
+    <div class="box"><div class="lbl">ОРУЖИЕ</div><div class="wpn" id="hWpn"><span>1</span><span>2</span><span>3</span></div></div>
+    <div class="box"><div class="lbl">КЛЮЧИ</div><div class="keys"><div class="key r" id="kR"></div><div class="key b" id="kB"></div></div></div>
+    <div class="box grow"><div class="lbl" id="hName">АНГАР</div><div class="small" id="hKills">Легион: 0/0</div></div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+//  ЗВЁЗДНЫЙ РЕЙД — псевдо-3D шутер (рейкастинг, как в Wolfenstein 3D)
+// =====================================================================
+const W = 480, H = 270, TS = 64;
+const cv = document.getElementById('c');
+cv.width = W; cv.height = H;
+const ctx = cv.getContext('2d');
+const frame = ctx.createImageData(W, H);
+const buf = new Uint32Array(frame.data.buffer);
+const zbuf = new Float32Array(W);
+const $ = id => document.getElementById(id);
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+// ---------------------------------------------------------------------
+//  ТЕКСТУРЫ — рисуем на canvas, светящиеся пиксели помечаем alpha=254
+// ---------------------------------------------------------------------
+function makeTex(w, h, draw, glow) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d'); draw(g, w, h);
+  const d = new Uint32Array(g.getImageData(0, 0, w, h).data.buffer.slice(0));
+  if (glow) {
+    const c2 = document.createElement('canvas'); c2.width = w; c2.height = h;
+    const g2 = c2.getContext('2d'); glow(g2, w, h);
+    const gd = g2.getImageData(0, 0, w, h).data;
+    for (let i = 0; i < w * h; i++) if (gd[i * 4 + 3] > 100)
+      d[i] = (254 << 24) | (gd[i * 4 + 2] << 16) | (gd[i * 4 + 1] << 8) | gd[i * 4];
+  }
+  return { w, h, d };
+}
+function noise(g, w, h, base, amt, n) {
+  g.fillStyle = base; g.fillRect(0, 0, w, h);
+  for (let i = 0; i < n; i++) { const v = Math.random() * amt | 0; g.fillStyle = `rgba(${v},${v},${v},.18)`; g.fillRect(Math.random() * w | 0, Math.random() * h | 0, 1, 1); }
+}
+function rivets(g, pts) { for (const [x, y] of pts) { g.fillStyle = '#9aa3b5'; g.fillRect(x, y, 2, 2); g.fillStyle = '#2a2e38'; g.fillRect(x + 1, y + 1, 1, 1); } }
+function bevel(g, x, y, w, h, light, dark) {
+  g.fillStyle = light; g.fillRect(x, y, w, 1); g.fillRect(x, y, 1, h);
+  g.fillStyle = dark; g.fillRect(x, y + h - 1, w, 1); g.fillRect(x + w - 1, y, 1, h);
+}
+
+const T = {};
+T.panel = makeTex(TS, TS, (g) => {
+  noise(g, TS, TS, '#59606f', 255, 900);
+  for (const [x, y, w, h] of [[2, 2, 28, 28], [34, 2, 28, 28], [2, 34, 60, 28]]) { g.fillStyle = '#646c7d'; g.fillRect(x, y, w, h); bevel(g, x, y, w, h, '#8a93a6', '#353a45'); }
+  g.fillStyle = '#3d4350'; g.fillRect(10, 44, 44, 4);
+  rivets(g, [[4, 4], [26, 4], [36, 4], [58, 4], [4, 58], [58, 58]]);
+});
+T.panel2 = makeTex(TS, TS, (g) => {
+  noise(g, TS, TS, '#4d5462', 255, 900);
+  for (let y = 0; y < TS; y += 16) { g.fillStyle = '#5a6272'; g.fillRect(1, y + 1, 62, 14); bevel(g, 1, y + 1, 62, 14, '#7c8597', '#30343e'); }
+  g.fillStyle = '#2a2e38'; g.fillRect(30, 0, 4, 64);
+}, (g) => { g.fillStyle = '#4ad8ff'; g.fillRect(31, 6, 2, 4); g.fillRect(31, 38, 2, 4); });
+T.tech = makeTex(TS, TS, (g) => {
+  noise(g, TS, TS, '#3c4250', 255, 600);
+  g.fillStyle = '#20242c'; g.fillRect(6, 6, 52, 30); bevel(g, 6, 6, 52, 30, '#2a2e38', '#7a8396');
+  g.fillStyle = '#1b2a22'; g.fillRect(9, 9, 46, 24);
+  g.fillStyle = '#2b2f3a'; g.fillRect(6, 42, 52, 16); bevel(g, 6, 42, 52, 16, '#7a8396', '#20242c');
+}, (g) => {
+  g.fillStyle = '#39ff8a'; for (let i = 0; i < 6; i++) g.fillRect(11, 11 + i * 3.5, rnd(10, 40), 1.5);
+  const cols = ['#ff3b3b', '#ffd23a', '#39ff8a', '#4ad8ff'];
+  for (let i = 0; i < 8; i++) { g.fillStyle = cols[i % 4]; g.fillRect(10 + i * 6, 47, 3, 3); }
+  g.fillStyle = '#4ad8ff'; g.fillRect(10, 53, 44, 2);
+});
+T.window = makeTex(TS, TS, (g) => {
+  g.fillStyle = '#4d5462'; g.fillRect(0, 0, TS, TS);
+  g.fillStyle = '#05030c'; g.fillRect(6, 8, 52, 44);
+  bevel(g, 5, 7, 54, 46, '#2a2e38', '#8a93a6');
+  g.fillStyle = '#4d5462'; g.fillRect(31, 8, 2, 44);
+}, (g) => {
+  for (let i = 0; i < 40; i++) { g.fillStyle = Math.random() < .2 ? '#bcd6ff' : '#ffffff'; g.fillRect(rnd(7, 57) | 0, rnd(9, 51) | 0, 1, 1); }
+  const gr = g.createRadialGradient(46, 40, 1, 46, 40, 12); gr.addColorStop(0, '#ffb070'); gr.addColorStop(1, '#7a2c10');
+  g.fillStyle = gr; g.beginPath(); g.arc(46, 40, 10, 0, 7); g.fill();
+  g.clearRect(31, 8, 2, 44);
+});
+T.hazard = makeTex(TS, TS, (g) => {
+  noise(g, TS, TS, '#59606f', 255, 700);
+  g.save(); g.beginPath(); g.rect(0, 40, 64, 20); g.clip();
+  g.fillStyle = '#1a1a1a'; g.fillRect(0, 40, 64, 20);
+  g.fillStyle = '#e6b51e'; for (let x = -20; x < 70; x += 12) { g.beginPath(); g.moveTo(x, 60); g.lineTo(x + 6, 60); g.lineTo(x + 26, 40); g.lineTo(x + 20, 40); g.fill(); }
+  g.restore(); bevel(g, 0, 40, 64, 20, '#8a93a6', '#2a2e38');
+  rivets(g, [[6, 6], [56, 6], [6, 30], [56, 30]]);
+});
+function doorTex(stripe, glowCol) {
+  return makeTex(TS, TS, (g) => {
+    noise(g, TS, TS, '#6d7484', 255, 700);
+    g.fillStyle = '#7c8495'; g.fillRect(2, 2, 60, 60); bevel(g, 2, 2, 60, 60, '#a8b0c2', '#3a3f4a');
+    g.fillStyle = '#4a505d'; g.fillRect(31, 2, 2, 60);
+    for (let y = 8; y < 60; y += 10) { g.fillStyle = '#5f6676'; g.fillRect(8, y, 18, 2); g.fillRect(38, y, 18, 2); }
+    g.fillStyle = stripe; g.fillRect(2, 28, 60, 8);
+  }, glowCol ? (g) => { g.fillStyle = glowCol; g.fillRect(4, 30, 56, 4); } : null);
+}
+T.door = doorTex('#3c4f6e', null);
+T.doorR = doorTex('#7a1414', '#ff3030');
+T.doorB = doorTex('#14307a', '#3a7bff');
+T.exit = makeTex(TS, TS, (g) => {
+  noise(g, TS, TS, '#3c4250', 255, 600);
+  g.fillStyle = '#20242c'; g.fillRect(8, 6, 48, 52); bevel(g, 8, 6, 48, 52, '#2a2e38', '#8a93a6');
+}, (g) => {
+  g.fillStyle = '#39ff8a'; g.font = 'bold 11px Arial'; g.textAlign = 'center'; g.fillText('ВЫХОД', 32, 20);
+  g.beginPath(); g.moveTo(32, 26); g.lineTo(44, 40); g.lineTo(20, 40); g.fill();
+  g.fillRect(16, 48, 32, 4);
+});
+T.floor = makeTex(TS, TS, (g) => {
+  noise(g, TS, TS, '#2c3038', 255, 700);
+  g.fillStyle = '#353a45'; g.fillRect(1, 1, 30, 30); g.fillRect(33, 33, 30, 30);
+  g.fillStyle = '#30343e'; g.fillRect(33, 1, 30, 30); g.fillRect(1, 33, 30, 30);
+  g.fillStyle = '#1c1f25'; g.fillRect(0, 31, 64, 2); g.fillRect(31, 0, 2, 64);
+  for (let i = 0; i < 6; i++) { g.fillStyle = '#262a32'; g.fillRect(6 + i * 4, 8, 2, 16); g.fillRect(38, 40 + i * 3, 18, 1); }
+});
+T.ceil = makeTex(TS, TS, (g) => {
+  noise(g, TS, TS, '#24272e', 255, 500);
+  g.fillStyle = '#1a1c21'; g.fillRect(0, 0, 64, 2); g.fillRect(0, 0, 2, 64);
+  g.fillStyle = '#30343c'; g.fillRect(20, 20, 24, 24);
+}, (g) => { g.fillStyle = '#e8f4ff'; g.fillRect(23, 23, 18, 18); g.fillStyle = '#9fd0ff'; g.fillRect(22, 22, 20, 1); });
+
+// ===== ЛОКАЦИИ: у каждого уровня свои стены, пол и потолок =====
+function rockBase(g, base, dark, n = 26) {
+  noise(g, TS, TS, base, 255, 1100);
+  for (let i = 0; i < n; i++) {
+    g.fillStyle = Math.random() < .5 ? dark : 'rgba(255,255,255,.06)';
+    g.beginPath(); g.ellipse(rnd(0, 64), rnd(0, 64), rnd(3, 12), rnd(2, 7), rnd(0, 3), 0, 7); g.fill();
+  }
+}
+function crack(g, color, w = 1.5) {
+  g.strokeStyle = color; g.lineWidth = w; g.beginPath();
+  let x = rnd(4, 60), y = 0; g.moveTo(x, y);
+  while (y < 64) { x += rnd(-7, 7); y += rnd(4, 10); g.lineTo(x, y); }
+  g.stroke();
+}
+function bricks(g, c1, c2, mortar, rows = 4) {
+  g.fillStyle = mortar; g.fillRect(0, 0, 64, 64);
+  const rh = 64 / rows;
+  for (let r = 0; r < rows; r++) for (let c = -1; c < 3; c++) {
+    const x = c * 32 + (r % 2 ? 16 : 0) + 1, y = r * rh + 1;
+    const gr = g.createLinearGradient(x, y, x, y + rh); gr.addColorStop(0, c1); gr.addColorStop(1, c2);
+    g.fillStyle = gr; g.fillRect(x, y, 30, rh - 2);
+  }
+  for (let i = 0; i < 500; i++) { const v = Math.random() * 255 | 0; g.fillStyle = `rgba(${v},${v},${v},.12)`; g.fillRect(rnd(0, 64) | 0, rnd(0, 64) | 0, 1, 1); }
+}
+function vines(g) {
+  for (let k = 0; k < 4; k++) {
+    let x = rnd(0, 64); g.strokeStyle = '#2f5a22'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, 0);
+    for (let y = 0; y < rnd(20, 60); y += 4) { x += rnd(-3, 3); g.lineTo(x, y); }
+    g.stroke();
+    for (let i = 0; i < 8; i++) { g.fillStyle = Math.random() < .5 ? '#3f7a2a' : '#5a9a34'; g.beginPath(); g.ellipse(x + rnd(-6, 6), rnd(0, 50), 3, 1.6, rnd(0, 3), 0, 7); g.fill(); }
+  }
+}
+
+const THEMES = [
+  // 0 — Ангар станции
+  { panel: T.panel, panel2: T.panel2, tech: T.tech, window: T.window, hazard: T.hazard, floor: T.floor, ceil: T.ceil },
+
+  // 1 — Вулканическая шахта
+  {
+    panel: makeTex(TS, TS, (g) => { rockBase(g, '#3a2a24', 'rgba(0,0,0,.35)'); }, (g) => { crack(g, '#ff6a10', 1.6); }),
+    panel2: makeTex(TS, TS, (g) => { rockBase(g, '#2e2420', 'rgba(0,0,0,.4)'); g.fillStyle = '#4a3a30'; g.fillRect(0, 50, 64, 4); g.fillRect(8, 0, 4, 64); g.fillRect(52, 0, 4, 64); }, (g) => { crack(g, '#ffb030', 1); }),
+    tech: makeTex(TS, TS, (g) => {
+      rockBase(g, '#3a2a24', 'rgba(0,0,0,.35)');
+      g.fillStyle = '#23262d'; g.fillRect(8, 10, 48, 40); bevel(g, 8, 10, 48, 40, '#5a6272', '#16181d');
+      g.fillStyle = '#16181d'; g.fillRect(14, 16, 36, 20);
+    }, (g) => { g.fillStyle = '#ff9a30'; for (let i = 0; i < 5; i++) g.fillRect(16, 18 + i * 3.5, rnd(8, 32), 1.5); g.fillStyle = '#ff3030'; g.fillRect(14, 42, 6, 4); g.fillStyle = '#ffd23a'; g.fillRect(24, 42, 6, 4); }),
+    window: makeTex(TS, TS, (g) => {
+      rockBase(g, '#2e2420', 'rgba(0,0,0,.4)');
+      g.fillStyle = '#120806'; g.fillRect(6, 8, 52, 44); bevel(g, 5, 7, 54, 46, '#16181d', '#6a5a50');
+      g.fillStyle = '#2a1a14'; g.beginPath(); g.moveTo(6, 30); g.lineTo(20, 18); g.lineTo(30, 26); g.lineTo(44, 14); g.lineTo(58, 28); g.lineTo(58, 36); g.lineTo(6, 36); g.fill();
+    }, (g) => {
+      const gr = g.createLinearGradient(0, 36, 0, 52); gr.addColorStop(0, '#ffd040'); gr.addColorStop(1, '#ff4000');
+      g.fillStyle = gr; g.fillRect(6, 36, 52, 16);
+      g.fillStyle = '#ff7010'; g.fillRect(6, 8, 52, 2);
+      for (let i = 0; i < 12; i++) { g.fillStyle = '#ffe080'; g.fillRect(rnd(7, 57) | 0, rnd(37, 51) | 0, 2, 1); }
+    }),
+    hazard: makeTex(TS, TS, (g) => {
+      rockBase(g, '#3a2a24', 'rgba(0,0,0,.35)');
+      g.fillStyle = '#4a505d'; for (let x = 4; x < 64; x += 14) g.fillRect(x, 0, 5, 64);
+      g.fillStyle = '#23262d'; g.fillRect(0, 26, 64, 6);
+    }, (g) => { g.fillStyle = '#ff5010'; g.fillRect(0, 56, 64, 8); g.fillStyle = '#ffb030'; g.fillRect(0, 58, 64, 2); }),
+    floor: makeTex(TS, TS, (g) => { rockBase(g, '#2a201c', 'rgba(0,0,0,.4)', 16); g.fillStyle = 'rgba(0,0,0,.4)'; g.fillRect(0, 31, 64, 2); g.fillRect(31, 0, 2, 64); }, (g) => { if (Math.random() < 1) { g.strokeStyle = '#ff5010'; g.lineWidth = 1; g.beginPath(); g.moveTo(10, 50); g.lineTo(20, 44); g.lineTo(26, 48); g.stroke(); } }),
+    ceil: makeTex(TS, TS, (g) => { rockBase(g, '#221a17', 'rgba(0,0,0,.45)', 20); }, (g) => { g.fillStyle = '#ff7a20'; g.beginPath(); g.arc(32, 32, 3, 0, 7); g.fill(); }),
+  },
+
+  // 2 — Храм в джунглях
+  {
+    panel: makeTex(TS, TS, (g) => { bricks(g, '#7a7a62', '#5a5a48', '#33352a'); vines(g); }),
+    panel2: makeTex(TS, TS, (g) => { bricks(g, '#6e7058', '#4e5040', '#2c2e24', 3); g.fillStyle = 'rgba(60,110,40,.45)'; for (let i = 0; i < 18; i++) g.fillRect(rnd(0, 64), rnd(40, 64), rnd(3, 9), 2); }),
+    tech: makeTex(TS, TS, (g) => {
+      bricks(g, '#6e7058', '#4e5040', '#2c2e24', 4);
+      g.fillStyle = '#3a3c30'; g.fillRect(10, 8, 44, 48); bevel(g, 10, 8, 44, 48, '#8a8c74', '#22241c');
+      g.fillStyle = '#2c2e24'; g.fillRect(14, 12, 36, 40);
+    }, (g) => {
+      g.strokeStyle = '#3affd0'; g.lineWidth = 1.6;
+      g.beginPath(); g.arc(32, 26, 9, 0, 7); g.stroke();
+      g.beginPath(); g.moveTo(32, 14); g.lineTo(32, 46); g.moveTo(20, 40); g.lineTo(44, 40); g.stroke();
+      g.fillStyle = '#3affd0'; g.fillRect(30.5, 24.5, 3, 3);
+    }),
+    window: makeTex(TS, TS, (g) => {
+      bricks(g, '#7a7a62', '#5a5a48', '#33352a');
+      g.fillStyle = '#1a2a12'; g.beginPath(); g.moveTo(8, 56); g.lineTo(8, 22); g.quadraticCurveTo(32, 0, 56, 22); g.lineTo(56, 56); g.fill();
+    }, (g) => {
+      g.save(); g.beginPath(); g.moveTo(10, 54); g.lineTo(10, 23); g.quadraticCurveTo(32, 3, 54, 23); g.lineTo(54, 54); g.clip();
+      const gr = g.createLinearGradient(0, 4, 0, 54); gr.addColorStop(0, '#ffb070'); gr.addColorStop(.6, '#ff7a90'); gr.addColorStop(1, '#5a3a8a'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      g.fillStyle = '#fff0c0'; g.beginPath(); g.arc(40, 24, 5, 0, 7); g.fill();
+      g.fillStyle = '#18300f'; for (let i = 0; i < 9; i++) { g.beginPath(); g.arc(8 + i * 6, 52, rnd(5, 10), 0, 7); g.fill(); }
+      g.restore();
+    }),
+    hazard: makeTex(TS, TS, (g) => {
+      bricks(g, '#6e7058', '#4e5040', '#2c2e24', 4);
+      g.fillStyle = '#4a4c3c'; g.fillRect(4, 4, 56, 56); bevel(g, 4, 4, 56, 56, '#8a8c74', '#22241c');
+      g.fillStyle = '#2c2e24'; g.beginPath(); g.ellipse(22, 26, 6, 8, 0, 0, 7); g.ellipse(42, 26, 6, 8, 0, 0, 7); g.fill();
+      g.fillRect(24, 44, 16, 4);
+      vines(g);
+    }, (g) => { g.fillStyle = '#3affd0'; g.fillRect(20, 25, 4, 4); g.fillRect(40, 25, 4, 4); }),
+    floor: makeTex(TS, TS, (g) => {
+      g.fillStyle = '#2a2c22'; g.fillRect(0, 0, 64, 64);
+      for (const [x, y] of [[1, 1], [33, 1], [1, 33], [33, 33]]) { g.fillStyle = (x + y) % 64 ? '#55574a' : '#4c4e42'; g.fillRect(x, y, 30, 30); }
+      for (let i = 0; i < 700; i++) { const v = Math.random() * 255 | 0; g.fillStyle = `rgba(${v},${v},${v},.12)`; g.fillRect(rnd(0, 64) | 0, rnd(0, 64) | 0, 1, 1); }
+      g.fillStyle = 'rgba(60,110,40,.5)'; for (let i = 0; i < 10; i++) g.fillRect(rnd(0, 64), rnd(0, 64), rnd(2, 6), 2);
+    }),
+    ceil: makeTex(TS, TS, (g) => { bricks(g, '#4a4c3c', '#3a3c30', '#22241c', 2); vines(g); }, (g) => { g.fillStyle = '#ffcc70'; g.beginPath(); g.arc(32, 32, 2.5, 0, 7); g.fill(); }),
+  },
+
+  // 3 — Крейсер «Призрак»
+  {
+    panel: makeTex(TS, TS, (g) => {
+      noise(g, TS, TS, '#1c1d22', 255, 700);
+      for (const [x, y, w, h] of [[2, 2, 60, 18], [2, 22, 28, 40], [34, 22, 28, 40]]) { g.fillStyle = '#25272e'; g.fillRect(x, y, w, h); bevel(g, x, y, w, h, '#3a3d48', '#0e0f12'); }
+    }, (g) => { g.fillStyle = '#ff2030'; g.fillRect(2, 20, 60, 1.5); g.fillRect(31, 24, 2, 36); }),
+    panel2: makeTex(TS, TS, (g) => {
+      noise(g, TS, TS, '#18191d', 255, 700);
+      for (let x = 2; x < 64; x += 12) { g.fillStyle = '#23252b'; g.fillRect(x, 2, 9, 60); bevel(g, x, 2, 9, 60, '#353844', '#0e0f12'); }
+    }, (g) => { g.fillStyle = '#ff2030'; for (let x = 5; x < 64; x += 12) g.fillRect(x, 6, 3, 2); }),
+    tech: makeTex(TS, TS, (g) => {
+      noise(g, TS, TS, '#1c1d22', 255, 600);
+      g.fillStyle = '#0e0f12'; g.fillRect(6, 6, 52, 34); bevel(g, 6, 6, 52, 34, '#0a0a0c', '#3a3d48');
+      g.fillStyle = '#120608'; g.fillRect(9, 9, 46, 28);
+    }, (g) => {
+      g.strokeStyle = '#ff3040'; g.lineWidth = 1; g.beginPath(); g.arc(32, 23, 10, 0, 7); g.stroke(); g.beginPath(); g.arc(32, 23, 5, 0, 7); g.stroke();
+      g.fillStyle = '#ff3040'; g.fillRect(31, 12, 2, 22); g.fillRect(21, 22, 22, 2);
+      for (let i = 0; i < 6; i++) { g.fillStyle = i % 2 ? '#ff3040' : '#ffb0b0'; g.fillRect(10 + i * 8, 46, 5, 3); }
+    }),
+    window: makeTex(TS, TS, (g) => {
+      g.fillStyle = '#1c1d22'; g.fillRect(0, 0, 64, 64);
+      g.fillStyle = '#020104'; g.fillRect(4, 6, 56, 48); bevel(g, 3, 5, 58, 50, '#0e0f12', '#3a3d48');
+      g.fillStyle = '#1c1d22'; g.fillRect(20, 6, 2, 48); g.fillRect(42, 6, 2, 48);
+      g.fillStyle = '#2a2c34';                                        // силуэты кораблей флота
+      g.beginPath(); g.moveTo(10, 24); g.lineTo(30, 20); g.lineTo(34, 24); g.lineTo(10, 26); g.fill();
+      g.beginPath(); g.moveTo(40, 38); g.lineTo(56, 35); g.lineTo(58, 38); g.lineTo(40, 39); g.fill();
+    }, (g) => {
+      for (let i = 0; i < 30; i++) { g.fillStyle = '#ffffff'; g.fillRect(rnd(5, 59) | 0, rnd(7, 53) | 0, 1, 1); }
+      g.fillStyle = '#ff5060'; g.fillRect(10, 25, 2, 1); g.fillRect(40, 38, 2, 1);
+      g.clearRect(20, 6, 2, 48); g.clearRect(42, 6, 2, 48);
+    }),
+    hazard: makeTex(TS, TS, (g) => {
+      noise(g, TS, TS, '#1c1d22', 255, 600);
+      g.fillStyle = '#25272e'; g.fillRect(4, 4, 56, 56); bevel(g, 4, 4, 56, 56, '#3a3d48', '#0e0f12');
+      g.fillStyle = '#5a0c14'; g.beginPath(); g.moveTo(32, 10); g.lineTo(52, 44); g.lineTo(32, 54); g.lineTo(12, 44); g.fill();  // знамя Легиона
+    }, (g) => { g.fillStyle = '#ff2030'; g.beginPath(); g.moveTo(32, 18); g.lineTo(42, 40); g.lineTo(32, 46); g.lineTo(22, 40); g.fill(); g.fillStyle = '#1c1d22'; g.fillRect(31, 22, 2, 20); }),
+    floor: makeTex(TS, TS, (g) => {
+      noise(g, TS, TS, '#16171b', 255, 600);
+      g.fillStyle = '#1e2025'; g.fillRect(1, 1, 62, 62);
+      g.fillStyle = '#0c0d10'; for (let x = 0; x < 64; x += 8) g.fillRect(x, 0, 1, 64);
+    }, (g) => { g.fillStyle = '#ff2030'; g.fillRect(0, 31, 64, 1.5); }),
+    ceil: makeTex(TS, TS, (g) => { noise(g, TS, TS, '#121317', 255, 400); g.fillStyle = '#0a0a0c'; g.fillRect(0, 0, 64, 2); g.fillRect(0, 0, 2, 64); }, (g) => { g.fillStyle = '#ff3040'; g.fillRect(8, 30, 48, 3); }),
+  },
+];
+let TH = THEMES[0];
+
+// ---------------------------------------------------------------------
+//  СПРАЙТЫ — враги, предметы, выстрелы
+// ---------------------------------------------------------------------
+function sprite(w, h, draw, glow) { return makeTex(w, h, draw, glow); }
+function metal(g, x, y, w, h, c1, c2) { const gr = g.createLinearGradient(x, y, x + w, y + h); gr.addColorStop(0, c1); gr.addColorStop(1, c2); g.fillStyle = gr; g.fillRect(x, y, w, h); }
+
+// ===== ПРИЗРАЧНЫЙ ЛЕГИОН: оживлённые белые доспехи =====
+const ARM1 = '#f2f3f6', ARM2 = '#a7acb8', JOINT = '#4a505d', CAPE1 = '#8a1420', CAPE2 = '#3a060c', GOLD = '#c9a24a';
+function plate(g, pts, c1, c2) {
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const gr = g.createLinearGradient(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
+  gr.addColorStop(0, c1); gr.addColorStop(1, c2);
+  g.fillStyle = gr; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fill();
+  g.strokeStyle = 'rgba(40,44,54,.55)'; g.lineWidth = 0.8; g.stroke();
+}
+function rags(g, x, y, w, h, seed) {          // рваный плащ
+  const gr = g.createLinearGradient(x, y, x, y + h); gr.addColorStop(0, CAPE1); gr.addColorStop(1, CAPE2);
+  g.fillStyle = gr; g.beginPath(); g.moveTo(x, y); g.lineTo(x + w, y);
+  for (let i = 0, n = 6; i <= n; i++) g.lineTo(x + w - i * w / n, y + h - ((i + seed) % 2 ? h * 0.18 : 0) - (i * 7 + seed) % 4);
+  g.closePath(); g.fill();
+}
+// голова-шлем: гранёный, высокий, с вертикальной щелью
+function helmet(g, cx, top, s, pain) {
+  const a = pain ? '#ffffff' : ARM1, b = pain ? '#ffb0b0' : ARM2;
+  plate(g, [[cx, top - 3 * s], [cx + 2 * s, top]], a, b);                   // гребень
+  g.fillStyle = a; g.fillRect(cx - 0.8 * s, top - 3 * s, 1.6 * s, 4 * s);
+  plate(g, [[cx - 5 * s, top + 2 * s], [cx, top], [cx + 5 * s, top + 2 * s], [cx + 6 * s, top + 8 * s], [cx + 3 * s, top + 13 * s], [cx - 3 * s, top + 13 * s], [cx - 6 * s, top + 8 * s]], a, b);
+  g.fillStyle = '#16181d'; g.fillRect(cx - 1.2 * s, top + 3 * s, 2.4 * s, 8 * s);   // щель
+  g.fillStyle = 'rgba(40,44,54,.6)'; g.fillRect(cx - 5 * s, top + 7 * s, 3 * s, 0.8 * s); g.fillRect(cx + 2 * s, top + 7 * s, 3 * s, 0.8 * s);
+}
+function helmetGlow(g, cx, top, s, bright) {
+  g.fillStyle = bright ? '#ffe0e0' : '#ff2030'; g.fillRect(cx - 0.6 * s, top + 3.5 * s, 1.2 * s, 7 * s);
+  g.fillStyle = '#ff2030'; g.fillRect(cx - 4.6 * s, top + 7.6 * s, 1 * s, 1 * s); g.fillRect(cx + 3.6 * s, top + 7.6 * s, 1 * s, 1 * s);
+}
+
+// Легионер — винтовка
+function legionFrame(step, firing, pain) {
+  return sprite(64, 64, (g) => {
+    const l = step === 1 ? -3 : step === 2 ? 3 : 0, a = pain ? '#ffffff' : ARM1, b = pain ? '#ffb0b0' : ARM2;
+    rags(g, 22, 34, 20, 26, step);                                   // плащ сзади
+    g.fillStyle = JOINT; g.fillRect(25 + l, 42, 5, 18); g.fillRect(34 - l, 42, 5, 18);
+    plate(g, [[24 + l, 46], [31 + l, 46], [30 + l, 60], [25 + l, 60]], a, b);
+    plate(g, [[33 - l, 46], [40 - l, 46], [39 - l, 60], [34 - l, 60]], a, b);
+    g.fillStyle = JOINT; g.fillRect(23 + l, 60, 9, 4); g.fillRect(32 - l, 60, 9, 4);
+    g.fillStyle = JOINT; g.fillRect(23, 34, 18, 9);                   // живот
+    for (let y = 35; y < 43; y += 3) { g.fillStyle = '#5c6372'; g.fillRect(24, y, 16, 1.5); }
+    plate(g, [[20, 18], [44, 18], [42, 34], [32, 37], [22, 34]], a, b);   // грудь
+    g.fillStyle = GOLD; g.fillRect(21, 18, 22, 1.2);
+    plate(g, [[11, 16], [22, 15], [23, 24], [13, 26]], a, b);            // наплечники
+    plate(g, [[42, 15], [53, 16], [51, 26], [41, 24]], a, b);
+    g.fillStyle = JOINT; g.fillRect(13, 26, 6, 10); g.fillRect(45, 26, 6, 9);
+    g.fillStyle = '#23262d'; g.fillRect(16, 34, 40, 4); g.fillRect(50, 31, 4, 10); g.fillRect(20, 37, 4, 6);  // длинная винтовка
+    helmet(g, 32, 3, 1, pain);
+    g.fillStyle = CAPE1; g.beginPath(); g.moveTo(30, 22); g.lineTo(34, 22); g.lineTo(32, 30); g.fill();        // эмблема
+  }, (g) => {
+    helmetGlow(g, 32, 3, 1, firing);
+    g.fillStyle = '#ff2030'; g.fillRect(24, 35, 26, 1.2);
+    if (firing) { g.fillStyle = '#ffd0c0'; g.beginPath(); g.arc(58, 36, 4, 0, 7); g.fill(); }
+  });
+}
+// Охотник — капюшон, быстрый
+function hunterFrame(step, firing, pain) {
+  return sprite(64, 64, (g) => {
+    const l = step === 1 ? -4 : step === 2 ? 4 : 0, a = pain ? '#ffffff' : ARM1, b = pain ? '#ffb0b0' : ARM2;
+    g.fillStyle = JOINT; g.fillRect(26 + l, 44, 4, 18); g.fillRect(34 - l, 44, 4, 18);
+    plate(g, [[25 + l, 50], [30 + l, 50], [30 + l, 61], [26 + l, 61]], a, b); plate(g, [[34 - l, 50], [39 - l, 50], [38 - l, 61], [34 - l, 61]], a, b);
+    rags(g, 18, 14, 28, 40, step + 1);                                  // плащ-балахон
+    plate(g, [[24, 20], [40, 20], [38, 34], [26, 34]], a, b);
+    g.fillStyle = '#2a0408'; g.beginPath(); g.moveTo(21, 15); g.quadraticCurveTo(32, -2, 43, 15); g.lineTo(40, 22); g.lineTo(24, 22); g.fill();  // капюшон
+    plate(g, [[27, 8], [37, 8], [36, 19], [32, 21], [28, 19]], a, b);  // маска
+    g.fillStyle = '#16181d'; g.fillRect(31, 10, 2, 8);
+    g.fillStyle = '#23262d'; g.fillRect(40, 28, 12, 4); g.fillRect(40, 30, 3, 6);  // пистолет
+  }, (g) => {
+    g.fillStyle = firing ? '#ffe0e0' : '#ff2030'; g.fillRect(31.4, 10.5, 1.2, 7);
+    if (firing) { g.fillStyle = '#ffd0c0'; g.beginPath(); g.arc(54, 30, 4, 0, 7); g.fill(); }
+  });
+}
+// Тяжёлый гвардеец — щит и пушка
+function heavyFrame(step, firing, pain) {
+  return sprite(64, 64, (g) => {
+    const l = step === 1 ? -2 : step === 2 ? 2 : 0, a = pain ? '#ffffff' : ARM1, b = pain ? '#ffb0b0' : ARM2;
+    rags(g, 18, 30, 28, 30, step);
+    g.fillStyle = JOINT; g.fillRect(21 + l, 44, 8, 18); g.fillRect(35 - l, 44, 8, 18);
+    plate(g, [[19 + l, 46], [30 + l, 46], [29 + l, 62], [20 + l, 62]], a, b); plate(g, [[34 - l, 46], [45 - l, 46], [44 - l, 62], [35 - l, 62]], a, b);
+    plate(g, [[16, 16], [48, 16], [46, 40], [32, 46], [18, 40]], a, b);
+    g.fillStyle = GOLD; g.fillRect(17, 16, 30, 1.5); g.fillRect(31, 18, 2, 24);
+    plate(g, [[5, 12], [20, 11], [21, 24], [7, 26]], a, b); plate(g, [[44, 11], [59, 12], [57, 26], [43, 24]], a, b);
+    g.fillStyle = '#23262d'; g.fillRect(48, 2, 9, 14); g.fillRect(46, 14, 13, 5);   // пушка на плече
+    plate(g, [[2, 24], [16, 22], [16, 52], [9, 58], [2, 52]], a, b);                // щит
+    g.fillStyle = CAPE1; g.fillRect(8, 30, 2, 18); g.fillRect(5, 36, 8, 2);
+    helmet(g, 32, 2, 1.15, pain);
+  }, (g) => {
+    helmetGlow(g, 32, 2, 1.15, firing);
+    g.fillStyle = '#ff2030'; g.fillRect(50, 4, 5, 2);
+    if (firing) { g.fillStyle = '#ffd0c0'; g.beginPath(); g.arc(52, 2, 5, 0, 7); g.fill(); }
+  });
+}
+// Владыка Легиона — босс
+function bossFrame(step, firing, pain) {
+  return sprite(96, 96, (g) => {
+    const l = step === 1 ? -4 : step === 2 ? 4 : 0, a = pain ? '#ffffff' : ARM1, b = pain ? '#ffb0b0' : ARM2;
+    rags(g, 18, 20, 60, 74, step);                                         // огромный плащ
+    g.fillStyle = JOINT; g.fillRect(34 + l, 62, 10, 30); g.fillRect(52 - l, 62, 10, 30);
+    plate(g, [[32 + l, 66], [46 + l, 66], [45 + l, 92], [33 + l, 92]], a, b); plate(g, [[50 - l, 66], [64 - l, 66], [63 - l, 92], [51 - l, 92]], a, b);
+    plate(g, [[28, 26], [68, 26], [64, 56], [48, 64], [32, 56]], a, b);
+    g.fillStyle = GOLD; g.fillRect(29, 26, 38, 2); g.fillRect(47, 28, 2, 32); g.fillRect(36, 40, 24, 2);
+    plate(g, [[12, 20], [32, 18], [34, 34], [14, 38]], a, b); plate(g, [[64, 18], [84, 20], [82, 38], [62, 34]], a, b);
+    g.fillStyle = GOLD; g.fillRect(12, 20, 20, 1.5); g.fillRect(64, 20, 20, 1.5);
+    g.fillStyle = JOINT; g.fillRect(16, 38, 9, 18); g.fillRect(72, 38, 9, 16);
+    g.fillStyle = '#23262d'; g.fillRect(83, 4, 4, 88); g.fillRect(78, 40, 12, 6);          // посох-пушка
+    // рога-корона
+    g.fillStyle = a;
+    g.beginPath(); g.moveTo(38, 10); g.lineTo(30, -2); g.lineTo(42, 6); g.fill();
+    g.beginPath(); g.moveTo(58, 10); g.lineTo(66, -2); g.lineTo(54, 6); g.fill();
+    helmet(g, 48, 6, 1.6, pain);
+    g.fillStyle = GOLD; g.fillRect(41, 9, 14, 1.5);
+  }, (g) => {
+    helmetGlow(g, 48, 6, 1.6, firing);
+    g.fillStyle = '#ff2030'; g.beginPath(); g.arc(85, 6, firing ? 6 : 3.5, 0, 7); g.fill();
+    g.fillStyle = '#ff2030'; g.fillRect(44, 46, 8, 3);
+  });
+}
+// Побеждённый легионер: пустые доспехи, щель погасла
+function wreck(withCape, size = 64) {
+  return sprite(size, size, (g) => {
+    const s = size / 64;
+    if (withCape) { g.fillStyle = CAPE2; g.fillRect(8 * s, 56 * s, 46 * s, 7 * s); g.fillStyle = CAPE1; g.fillRect(12 * s, 55 * s, 30 * s, 3 * s); }
+    plate(g, [[14 * s, 52 * s], [30 * s, 50 * s], [32 * s, 60 * s], [12 * s, 62 * s]], ARM1, ARM2);
+    plate(g, [[34 * s, 54 * s], [48 * s, 53 * s], [50 * s, 62 * s], [34 * s, 62 * s]], ARM1, ARM2);
+    plate(g, [[40 * s, 46 * s], [50 * s, 44 * s], [54 * s, 50 * s], [50 * s, 56 * s], [42 * s, 56 * s]], ARM1, ARM2);  // шлем
+    g.fillStyle = '#16181d'; g.fillRect(46 * s, 46 * s, 2 * s, 8 * s);
+    g.fillStyle = JOINT; g.fillRect(28 * s, 58 * s, 8 * s, 4 * s);
+  }, (g) => { const s = size / 64; g.fillStyle = '#b8d8ff'; g.fillRect(20 * s, 48 * s, 1.5 * s, 2 * s); g.fillRect(44 * s, 40 * s, 1.5 * s, 2 * s); });
+}
+// Облако призрачного тумана при победе
+const MIST = [0, 1, 2, 3].map(k => sprite(32, 32, () => {}, (g) => {
+  const r = 7 + k * 3.5;
+  const gr = g.createRadialGradient(16, 16, 0, 16, 16, r); gr.addColorStop(0, k < 2 ? '#ffffff' : '#c8dcff'); gr.addColorStop(.55, '#9ab8ff'); gr.addColorStop(1, 'rgba(120,140,255,0)');
+  g.fillStyle = gr; g.beginPath(); g.arc(16, 16, r, 0, 7); g.fill();
+}));
+
+const ETYPES = {
+  d: { name: 'hunter', hp: 35, speed: 2.2, dmg: 7, cd: 1.2, range: 10, scale: 0.9, lift: 0, shots: 1,
+       frames: [hunterFrame(0, 0, 0), hunterFrame(1, 0, 0), hunterFrame(2, 0, 0), hunterFrame(0, 1, 0), hunterFrame(0, 0, 1)], dead: wreck(true) },
+  t: { name: 'legion', hp: 55, speed: 1.3, dmg: 10, cd: 1.3, range: 12, scale: 0.97, lift: 0, shots: 1,
+       frames: [legionFrame(0, 0, 0), legionFrame(1, 0, 0), legionFrame(2, 0, 0), legionFrame(0, 1, 0), legionFrame(0, 0, 1)], dead: wreck(true) },
+  h: { name: 'guard', hp: 150, speed: 0.8, dmg: 9, cd: 2.0, range: 12, scale: 1.05, lift: 0, shots: 3,
+       frames: [heavyFrame(0, 0, 0), heavyFrame(1, 0, 0), heavyFrame(2, 0, 0), heavyFrame(0, 1, 0), heavyFrame(0, 0, 1)], dead: wreck(true) },
+  X: { name: 'boss', hp: 1000, speed: 1.0, dmg: 10, cd: 1.1, range: 16, scale: 1.6, lift: 0, shots: 5,
+       frames: [bossFrame(0, 0, 0), bossFrame(1, 0, 0), bossFrame(2, 0, 0), bossFrame(0, 1, 0), bossFrame(0, 0, 1)], dead: wreck(true, 96) },
+};
+
+// анимация: 0..1 — ходьба (кадры 0/1/2), attack, pain
+function eFrame(e) {
+  const f = ETYPES[e.t].frames;
+  if (e.pain > 0) return f[4];
+  if (e.fire > 0) return f[3];
+  return e.moving ? f[1 + ((e.anim | 0) % 2)] : f[0];
+}
+
+const ITEMS = {
+  '+': { tex: sprite(32, 32, (g) => { metal(g, 4, 10, 24, 18, '#e8ecf2', '#9aa3b5'); g.fillStyle = '#3a3f4a'; g.fillRect(12, 6, 8, 5); }, (g) => { g.fillStyle = '#39ff8a'; g.fillRect(14, 12, 4, 14); g.fillRect(9, 17, 14, 4); }), scale: 0.38 },
+  'a': { tex: sprite(32, 32, (g) => { metal(g, 4, 12, 24, 16, '#d0a020', '#6a4a08'); g.fillStyle = '#23262d'; g.fillRect(4, 18, 24, 3); }, (g) => { g.fillStyle = '#ffe46b'; for (let i = 0; i < 4; i++) g.fillRect(7 + i * 5, 13, 3, 4); }), scale: 0.36 },
+  'c': { tex: sprite(32, 32, (g) => { for (let i = 0; i < 3; i++) { metal(g, 4 + i * 9, 10, 7, 18, '#5a6272', '#23262d'); } }, (g) => { g.fillStyle = '#4ad8ff'; for (let i = 0; i < 3; i++) g.fillRect(5 + i * 9, 13, 5, 10); }), scale: 0.36 },
+  'r': { tex: sprite(32, 32, (g) => { g.fillStyle = '#23262d'; g.fillRect(6, 10, 20, 14); }, (g) => { g.fillStyle = '#ff3030'; g.fillRect(8, 12, 16, 10); g.fillStyle = '#ffd0d0'; g.fillRect(10, 14, 6, 2); }), scale: 0.32, lift: 0.1 },
+  'b': { tex: sprite(32, 32, (g) => { g.fillStyle = '#23262d'; g.fillRect(6, 10, 20, 14); }, (g) => { g.fillStyle = '#3a7bff'; g.fillRect(8, 12, 16, 10); g.fillStyle = '#d0e0ff'; g.fillRect(10, 14, 6, 2); }), scale: 0.32, lift: 0.1 },
+  '2': { tex: sprite(48, 24, (g) => { metal(g, 2, 8, 40, 8, '#6a7284', '#2a2e38'); g.fillStyle = '#23262d'; g.fillRect(10, 14, 6, 9); g.fillRect(28, 14, 5, 6); g.fillRect(40, 10, 7, 3); }, (g) => { g.fillStyle = '#ffd23a'; g.fillRect(18, 10, 12, 2); }), scale: 0.4 },
+  '3': { tex: sprite(48, 28, (g) => { metal(g, 2, 6, 38, 14, '#5a6272', '#23262d'); g.fillStyle = '#23262d'; g.fillRect(12, 18, 7, 9); g.fillRect(38, 8, 9, 10); }, (g) => { g.fillStyle = '#4ad8ff'; g.fillRect(8, 10, 24, 3); g.fillRect(42, 11, 3, 4); }), scale: 0.45 },
+};
+const BOLT_RED = sprite(16, 16, () => {}, (g) => { const gr = g.createRadialGradient(8, 8, 0, 8, 8, 7); gr.addColorStop(0, '#fff'); gr.addColorStop(.4, '#ff5040'); gr.addColorStop(1, 'rgba(255,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 16, 16); });
+const BOLT_PINK = sprite(16, 16, () => {}, (g) => { const gr = g.createRadialGradient(8, 8, 0, 8, 8, 7); gr.addColorStop(0, '#fff'); gr.addColorStop(.4, '#ff40c0'); gr.addColorStop(1, 'rgba(255,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 16, 16); });
+const BOLT_BLUE = sprite(16, 16, () => {}, (g) => { const gr = g.createRadialGradient(8, 8, 0, 8, 8, 8); gr.addColorStop(0, '#fff'); gr.addColorStop(.35, '#4ad8ff'); gr.addColorStop(1, 'rgba(0,0,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 16, 16); });
+const BOOM = [0, 1, 2, 3].map(k => sprite(32, 32, () => {}, (g) => {
+  const r = 6 + k * 4;
+  const gr = g.createRadialGradient(16, 16, 0, 16, 16, r); gr.addColorStop(0, k < 2 ? '#fff6c0' : '#ffb040'); gr.addColorStop(.6, '#ff6a10'); gr.addColorStop(1, 'rgba(120,20,0,0)');
+  g.fillStyle = gr; g.beginPath(); g.arc(16, 16, r, 0, 7); g.fill();
+}));
+
+// Оружие в руках (рисуем canvas'ом поверх кадра)
+function gunCanvas(draw) { const c = document.createElement('canvas'); c.width = 160; c.height = 110; draw(c.getContext('2d')); return c; }
+const GUNS = [
+  { name: 'БЛАСТЕР', rate: 0.32, dmg: [16, 26], ammo: null, spread: 0.02,
+    img: gunCanvas((g) => {
+      metal(g, 64, 50, 32, 60, '#6a7284', '#23262d');
+      metal(g, 68, 20, 24, 40, '#8a93a6', '#3a3f4a');
+      g.fillStyle = '#1b1d22'; g.fillRect(74, 14, 12, 10); g.fillRect(70, 60, 20, 4);
+      g.fillStyle = '#4ad8ff'; g.fillRect(76, 34, 8, 14);
+      g.fillStyle = '#d0a020'; g.fillRect(68, 66, 24, 3);
+    }) },
+  { name: 'ВИНТОВКА', rate: 0.1, dmg: [9, 14], ammo: 'rifle', spread: 0.05,
+    img: gunCanvas((g) => {
+      metal(g, 52, 56, 56, 54, '#4a505d', '#1b1d22');
+      metal(g, 62, 18, 36, 50, '#7c8495', '#2a2e38');
+      g.fillStyle = '#1b1d22'; g.fillRect(72, 4, 16, 18); g.fillRect(66, 40, 28, 4);
+      g.fillStyle = '#ffd23a'; g.fillRect(64, 28, 4, 22); g.fillRect(92, 28, 4, 22);
+      g.fillStyle = '#23262d'; g.fillRect(100, 60, 10, 30);
+    }) },
+  { name: 'ПЛАЗМОМЁТ', rate: 0.8, dmg: [0, 0], ammo: 'cells', spread: 0,
+    img: gunCanvas((g) => {
+      metal(g, 44, 50, 72, 60, '#3a404c', '#16181d');
+      metal(g, 56, 14, 48, 56, '#5a6272', '#1b1d22');
+      g.fillStyle = '#16181d'; g.beginPath(); g.arc(80, 16, 14, 0, 7); g.fill();
+      g.fillStyle = '#2a7bbf'; g.fillRect(60, 40, 40, 6);
+      g.fillStyle = '#4ad8ff'; g.beginPath(); g.arc(80, 16, 8, 0, 7); g.fill();
+      g.fillStyle = '#4ad8ff'; for (let i = 0; i < 4; i++) g.fillRect(62 + i * 10, 56, 6, 6);
+    }) },
+];
+const FLASH = gunCanvas((g) => { const gr = g.createRadialGradient(80, 18, 0, 80, 18, 34); gr.addColorStop(0, 'rgba(255,255,230,1)'); gr.addColorStop(.35, 'rgba(255,200,80,.9)'); gr.addColorStop(1, 'rgba(255,120,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 160, 70); });
+const FLASH_B = gunCanvas((g) => { const gr = g.createRadialGradient(80, 14, 0, 80, 14, 40); gr.addColorStop(0, 'rgba(230,255,255,1)'); gr.addColorStop(.35, 'rgba(80,200,255,.9)'); gr.addColorStop(1, 'rgba(0,80,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 160, 70); });
+
+// ---------------------------------------------------------------------
+//  УРОВНИ
+//  # % W ! — стены, D — дверь, R/B — двери с ключом, E — выход
+//  P — игрок, d t h X — охотник/легионер/гвардеец/Владыка, + a c — аптечка/заряд/плазма,
+//  r b — ключи, 2 3 — оружие
+// ---------------------------------------------------------------------
+const LEVELS = [
+  { name: 'АНГАР', map: [
+    '###W####W###W#######',
+    '#P...#......d....+.#',
+    '#....%.............#',
+    '#..a.D.....!##D##%##',
+    '#....#.....#.......#',
+    '##D###..d..#...t...W',
+    '#....#.....#.......#',
+    '#.+..%.....#...2...#',
+    '#....###D###.......#',
+    '#...t.............aE',
+    '#####%####W#####%###',
+  ] },
+  { name: 'ВУЛКАНИЧЕСКАЯ ШАХТА', map: [
+    '####W#######W#####W#####',
+    '#P..#.......#.....d....#',
+    '#...%..t....%..........W',
+    '#...D.......D....t..a..#',
+    '#...#...d...#..........#',
+    '##.##########.#####R####',
+    '#.....#.....#.#........#',
+    'W..d..D..r..#.#...h....#',
+    '#.....#.....#.#........#',
+    '#.+...#.a...#a#....+...E',
+    '#####%######!#######%###',
+  ] },
+  { name: 'ХРАМ В ДЖУНГЛЯХ', map: [
+    '#####W######W######W######',
+    '#P.....#........#........#',
+    '#......%...t....%...h....W',
+    '#..a...D........D........#',
+    '#......#....d...#.....3..#',
+    '###D#######R########B#####',
+    '#......#........#........#',
+    '#..t...!...h....!...h..c.#',
+    '#......#........#........#',
+    '#..b...#...+....#....t...#',
+    '#....d.#........#...r....#',
+    '#......#.....c..#........#',
+    '###########E##############',
+  ] },
+  { name: 'КРЕЙСЕР «ПРИЗРАК»', boss: true, map: [
+    '###W#########W#########W',
+    '#P.....#.......#.......#',
+    '#......D...t...D...h...#',
+    '#..a...#.......#.......#',
+    '####D###########D#######',
+    '#......................#',
+    'W..+....!......!....a..W',
+    '#.......#......#.......#',
+    '#...h........X.......c.#',
+    '#.......#......#.......#',
+    '#..3....!......!....+..#',
+    '#......................#',
+    '###########E############',
+  ] },
+];
+const WALLS = '#%W!DRBE';
+
+// ---------------------------------------------------------------------
+//  СОСТОЯНИЕ ИГРЫ
+// ---------------------------------------------------------------------
+let map, MW, MH, doors, enemies, items, shots, effects, levelIdx = 0, levelTime = 0, kills = 0, totalEnemies = 0;
+const P = { x: 0, y: 0, dx: 1, dy: 0, px: 0, py: 0.66, hp: 100, rifle: 0, cells: 0, has: [true, false, false], wpn: 0, keys: { r: false, b: false }, cd: 0, flash: 0, bob: 0, dead: false };
+let saved = null;
+let state = 'menu';
+
+function loadLevel(i) {
+  const L = LEVELS[i];
+  map = L.map.map(r => r.split('')); MH = map.length; MW = map[0].length;
+  doors = {}; enemies = []; items = []; shots = []; effects = [];
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    const ch = map[y][x];
+    if (ch === 'D' || ch === 'R' || ch === 'B') doors[y * MW + x] = { x, y, open: 0, target: 0, timer: 0, lock: ch === 'R' ? 'r' : ch === 'B' ? 'b' : null };
+    else if (ch === 'P') { P.x = x + 0.5; P.y = y + 0.5; map[y][x] = '.'; }
+    else if (ETYPES[ch]) { const t = ETYPES[ch]; enemies.push({ t: ch, x: x + 0.5, y: y + 0.5, hp: t.hp, cd: rnd(0.5, 1.5), anim: 0, pain: 0, fire: 0, alert: false, dead: false, moving: false, burst: 0 }); map[y][x] = '.'; }
+    else if (ITEMS[ch]) { items.push({ k: ch, x: x + 0.5, y: y + 0.5 }); map[y][x] = '.'; }
+  }
+  TH = THEMES[i];
+  P.dx = 1; P.dy = 0; P.px = 0; P.py = 0.66;
+  P.keys = { r: false, b: false }; P.dead = false;
+  kills = 0; totalEnemies = enemies.length; levelTime = 0;
+  saved = { hp: P.hp, rifle: P.rifle, cells: P.cells, has: [...P.has], wpn: P.wpn };
+  $('hLevel').textContent = i + 1; $('hName').textContent = L.name;
+  say(`Уровень ${i + 1}: ${L.name}`);
+}
+function restartLevel() { Object.assign(P, { hp: saved.hp, rifle: saved.rifle, cells: saved.cells, has: [...saved.has], wpn: saved.wpn }); loadLevel(levelIdx); }
+
+const cellAt = (x, y) => (x < 0 || y < 0 || x >= MW || y >= MH) ? '#' : map[y][x];
+function solid(x, y, forSight) {
+  const cx = Math.floor(x), cy = Math.floor(y), ch = cellAt(cx, cy);
+  if (!WALLS.includes(ch)) return false;
+  const d = doors[cy * MW + cx];
+  if (d) return forSight ? d.open < 0.5 : d.open < 0.95;
+  return true;
+}
+function canSee(ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, dist = Math.hypot(dx, dy), n = Math.ceil(dist / 0.15);
+  for (let i = 1; i < n; i++) if (solid(ax + dx * i / n, ay + dy * i / n, true)) return false;
+  return true;
+}
+
+// ---------------------------------------------------------------------
+//  ЗВУК (синтез)
+// ---------------------------------------------------------------------
+let AC = null, muted = false;
+function initAudio() { if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)(); }
+function tone(f1, f2, dur, type = 'square', vol = 0.15, delay = 0) {
+  if (!AC || muted) return;
+  const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
+  o.type = type; o.frequency.setValueAtTime(f1, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f2), t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t + dur + 0.02);
+}
+function noiseBurst(dur, vol = 0.3, freq = 1200) {
+  if (!AC || muted) return;
+  const len = AC.sampleRate * dur, b = AC.createBuffer(1, len, AC.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const s = AC.createBufferSource(), f = AC.createBiquadFilter(), g = AC.createGain();
+  s.buffer = b; f.type = 'lowpass'; f.frequency.value = freq; g.gain.value = vol;
+  s.connect(f); f.connect(g); g.connect(AC.destination); s.start();
+}
+const SFX = {
+  blaster: () => { tone(1400, 180, 0.18, 'square', 0.12); },
+  rifle: () => { tone(900, 300, 0.07, 'sawtooth', 0.08); noiseBurst(0.05, 0.12, 3000); },
+  plasma: () => { tone(220, 60, 0.5, 'sawtooth', 0.18); tone(880, 120, 0.3, 'sine', 0.12); },
+  enemy: () => { tone(700, 260, 0.2, 'square', 0.06); },
+  hit: () => { tone(300, 120, 0.06, 'square', 0.08); },
+  boom: () => { noiseBurst(0.6, 0.45, 700); tone(120, 30, 0.5, 'sine', 0.25); },
+  hurt: () => { tone(160, 70, 0.25, 'sawtooth', 0.16); },
+  pickup: () => { tone(660, 660, 0.07, 'square', 0.08); tone(990, 990, 0.09, 'square', 0.08, 0.07); },
+  door: () => { noiseBurst(0.45, 0.18, 400); },
+  denied: () => { tone(200, 180, 0.15, 'square', 0.1); tone(150, 140, 0.2, 'square', 0.1, 0.15); },
+  win: () => { [523, 659, 784, 1047].forEach((f, i) => tone(f, f, 0.18, 'square', 0.1, i * 0.12)); },
+};
+
+// ---------------------------------------------------------------------
+//  УПРАВЛЕНИЕ
+// ---------------------------------------------------------------------
+const keys = {};
+let mouseDown = false, showMap = false;
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Tab') { showMap = !showMap; e.preventDefault(); }
+  if (e.code === 'KeyM') muted = !muted;
+  if (e.code === 'Digit1') selectWeapon(0);
+  if (e.code === 'Digit2') selectWeapon(1);
+  if (e.code === 'Digit3') selectWeapon(2);
+  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+});
+addEventListener('keyup', e => keys[e.code] = false);
+cv.addEventListener('mousedown', () => { if (state === 'play') { if (document.pointerLockElement !== cv) cv.requestPointerLock(); mouseDown = true; } });
+addEventListener('mouseup', () => mouseDown = false);
+addEventListener('mousemove', e => { if (document.pointerLockElement === cv && state === 'play') rotate(e.movementX * 0.0025); });
+function rotate(a) {
+  const c = Math.cos(a), s = Math.sin(a);
+  [P.dx, P.dy] = [P.dx * c - P.dy * s, P.dx * s + P.dy * c];
+  [P.px, P.py] = [P.px * c - P.py * s, P.px * s + P.py * c];
+}
+function selectWeapon(i) { if (P.has[i] && state === 'play') { P.wpn = i; P.cd = Math.max(P.cd, 0.2); } }
+
+let msgT = 0;
+function say(t) { $('msg').textContent = t; msgT = 2.5; }
+
+// ---------------------------------------------------------------------
+//  ЛОГИКА
+// ---------------------------------------------------------------------
+function movePlayer(dt) {
+  const run = keys.ShiftLeft || keys.ShiftRight ? 1.65 : 1;
+  const sp = 3.1 * run * dt;
+  let mx = 0, my = 0;
+  if (keys.KeyW || keys.ArrowUp) { mx += P.dx; my += P.dy; }
+  if (keys.KeyS || keys.ArrowDown) { mx -= P.dx; my -= P.dy; }
+  if (keys.KeyA) { mx += P.dy; my -= P.dx; }
+  if (keys.KeyD) { mx -= P.dy; my += P.dx; }
+  if (keys.ArrowLeft) rotate(-2.6 * dt);
+  if (keys.ArrowRight) rotate(2.6 * dt);
+  const len = Math.hypot(mx, my);
+  if (len > 0) {
+    mx = mx / len * sp; my = my / len * sp;
+    const r = 0.25;
+    if (!solid(P.x + mx + Math.sign(mx) * r, P.y - r) && !solid(P.x + mx + Math.sign(mx) * r, P.y + r)) P.x += mx;
+    if (!solid(P.x - r, P.y + my + Math.sign(my) * r) && !solid(P.x + r, P.y + my + Math.sign(my) * r)) P.y += my;
+    P.bob += dt * 9 * run;
+    // выход
+    const fx = Math.floor(P.x + P.dx * 0.6), fy = Math.floor(P.y + P.dy * 0.6);
+    if (cellAt(fx, fy) === 'E') tryExit();
+  }
+}
+function tryExit() {
+  if (LEVELS[levelIdx].boss && enemies.some(e => e.t === 'X' && !e.dead)) { if (msgT < 1) { say('Сначала победи Владыку Легиона!'); SFX.denied(); } return; }
+  SFX.win();
+  levelDone();
+}
+
+function updateDoors(dt) {
+  for (const k in doors) {
+    const d = doors[k], cx = d.x + 0.5, cy = d.y + 0.5;
+    const near = Math.hypot(P.x - cx, P.y - cy) < 1.5;
+    const enemyNear = enemies.some(e => !e.dead && e.alert && Math.hypot(e.x - cx, e.y - cy) < 1.2);
+    if (near || enemyNear) {
+      if (near && d.lock && !P.keys[d.lock]) {
+        if (msgT < 1) { say(d.lock === 'r' ? 'Нужна КРАСНАЯ ключ-карта' : 'Нужна СИНЯЯ ключ-карта'); SFX.denied(); }
+      } else { if (d.target === 0 && d.open < 0.05) SFX.door(); d.target = 1; d.timer = 3; }
+    } else if (d.target === 1) {
+      d.timer -= dt;
+      const occupied = Math.floor(P.x) === d.x && Math.floor(P.y) === d.y || enemies.some(e => !e.dead && Math.floor(e.x) === d.x && Math.floor(e.y) === d.y);
+      if (d.timer <= 0 && !occupied) { d.target = 0; SFX.door(); }
+    }
+    d.open += Math.sign(d.target - d.open) * Math.min(Math.abs(d.target - d.open), dt * 1.6);
+  }
+}
+
+function fire() {
+  const g = GUNS[P.wpn];
+  if (P.cd > 0) return;
+  if (g.ammo === 'rifle' && P.rifle <= 0) { say('Нет заряда для винтовки'); selectWeapon(0); return; }
+  if (g.ammo === 'cells' && P.cells <= 0) { say('Нет плазмы'); selectWeapon(P.has[1] && P.rifle > 0 ? 1 : 0); return; }
+  P.cd = g.rate; P.flash = 0.08;
+  if (g.ammo === 'rifle') P.rifle--;
+  if (g.ammo === 'cells') P.cells--;
+  // шум выстрела будит легионеров поблизости
+  for (const e of enemies) if (!e.dead && Math.hypot(e.x - P.x, e.y - P.y) < 7) e.alert = true;
+  if (P.wpn === 2) {
+    SFX.plasma();
+    shots.push({ x: P.x + P.dx * 0.4, y: P.y + P.dy * 0.4, vx: P.dx * 9, vy: P.dy * 9, mine: true, tex: BOLT_BLUE, dmg: 0 });
+    return;
+  }
+  P.wpn === 0 ? SFX.blaster() : SFX.rifle();
+  // мгновенный выстрел: ищем врага около центра экрана
+  let best = null;
+  const off = rnd(-g.spread, g.spread) * W;
+  for (const e of enemies) {
+    if (e.dead || !e.vis) continue;
+    if (Math.abs(e.sx - (W / 2 + off)) < e.sw * 0.32 && e.depth < zbuf[W / 2 | 0] + 0.2) if (!best || e.depth < best.depth) best = e;
+  }
+  if (best) damage(best, rnd(g.dmg[0], g.dmg[1]) * (best.depth < 2 ? 1.25 : 1));
+}
+function damage(e, amount) {
+  e.hp -= amount; e.alert = true; e.pain = 0.14;
+  SFX.hit();
+  if (e.hp <= 0 && !e.dead) {
+    e.dead = true; kills++;
+    effects.push({ x: e.x, y: e.y, t: 0, scale: e.t === 'X' ? 1.8 : 0.9, mist: true });
+    SFX.boom();
+    if (e.t === 'X') say('Владыка Легиона повержен! Иди к выходу!');
+    // иногда роняет заряд
+    if (Math.random() < 0.35 && e.t !== 'X') items.push({ k: P.has[2] && Math.random() < 0.4 ? 'c' : 'a', x: e.x, y: e.y });
+  }
+}
+function hurtPlayer(n) {
+  if (P.dead) return;
+  P.hp = Math.max(0, P.hp - n);
+  $('flash').style.opacity = Math.min(0.6, 0.2 + n / 40);
+  SFX.hurt();
+  if (P.hp <= 0) { P.dead = true; state = 'dead'; showDead(); }
+}
+
+function updateEnemies(dt) {
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const t = ETYPES[e.t];
+    e.pain = Math.max(0, e.pain - dt); e.fire = Math.max(0, e.fire - dt);
+    const dx = P.x - e.x, dy = P.y - e.y, dist = Math.hypot(dx, dy);
+    const see = dist < 16 && canSee(e.x, e.y, P.x, P.y);
+    if (see && dist < 11) e.alert = true;
+    e.moving = false;
+    if (!e.alert || P.dead) { e.anim += dt * 2; continue; }
+    e.cd -= dt;
+    if (see && e.cd <= 0 && dist < t.range && e.pain <= 0) {
+      e.fire = 0.25;
+      const n = t.shots, spread = e.t === 'X' ? 0.16 : 0.12;
+      const base = Math.atan2(dy, dx);
+      for (let k = 0; k < n; k++) {
+        const a = base + (k - (n - 1) / 2) * spread + rnd(-0.04, 0.04);
+        const sp = e.t === 'X' ? 6.5 : e.t === 'd' ? 6 : 5.5;
+        shots.push({ x: e.x + Math.cos(a) * 0.4, y: e.y + Math.sin(a) * 0.4, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, mine: false, tex: e.t === 'X' ? BOLT_PINK : BOLT_RED, dmg: t.dmg, lift: e.t === 'd' ? 0.5 : 0.55 });
+      }
+      SFX.enemy();
+      if (e.t === 'X') { e.burst = (e.burst + 1) % 3; e.cd = e.burst ? 0.35 : t.cd * 1.6; }
+      else e.cd = t.cd * rnd(0.7, 1.3);
+    } else if (dist > 1.6 && e.pain <= 0) {
+      const sp = t.speed * dt, mx = dx / dist * sp, my = dy / dist * sp, r = e.t === 'X' ? 0.5 : 0.3;
+      let moved = false;
+      if (!solid(e.x + mx + Math.sign(mx) * r, e.y)) { e.x += mx; moved = true; }
+      if (!solid(e.x, e.y + my + Math.sign(my) * r)) { e.y += my; moved = true; }
+      if (moved) { e.moving = true; e.anim += dt * 5; }
+    }
+  }
+}
+function updateShots(dt) {
+  for (const s of shots) {
+    s.x += s.vx * dt; s.y += s.vy * dt;
+    if (solid(s.x, s.y, true)) { s.done = true; if (s.mine) explode(s.x - s.vx * dt, s.y - s.vy * dt); continue; }
+    if (s.mine) {
+      for (const e of enemies) if (!e.dead && Math.hypot(e.x - s.x, e.y - s.y) < (e.t === 'X' ? 0.8 : 0.45)) { s.done = true; explode(s.x, s.y); break; }
+    } else if (Math.hypot(P.x - s.x, P.y - s.y) < 0.32) { s.done = true; hurtPlayer(s.dmg); }
+  }
+  shots = shots.filter(s => !s.done);
+}
+function explode(x, y) {
+  effects.push({ x, y, t: 0, scale: 1.2 });
+  SFX.boom();
+  for (const e of enemies) {
+    if (e.dead) continue;
+    const d = Math.hypot(e.x - x, e.y - y);
+    if (d < 1.8) damage(e, 95 * (1 - d / 1.8) + 25);
+  }
+  const pd = Math.hypot(P.x - x, P.y - y);
+  if (pd < 1.3) hurtPlayer(Math.round(20 * (1 - pd / 1.3)));
+}
+function updateItems() {
+  for (const it of items) {
+    if (Math.hypot(P.x - it.x, P.y - it.y) > 0.55) continue;
+    const k = it.k;
+    if (k === '+') { if (P.hp >= 100) continue; P.hp = Math.min(100, P.hp + 25); say('Аптечка +25'); }
+    else if (k === 'a') { P.rifle += 20; say('Заряд для винтовки +20'); }
+    else if (k === 'c') { P.cells += 6; say('Плазма +6'); }
+    else if (k === 'r') { P.keys.r = true; say('КРАСНАЯ ключ-карта!'); }
+    else if (k === 'b') { P.keys.b = true; say('СИНЯЯ ключ-карта!'); }
+    else if (k === '2') { P.has[1] = true; P.rifle += 40; P.wpn = 1; say('Винтовка! Клавиша 2'); }
+    else if (k === '3') { P.has[2] = true; P.cells += 10; P.wpn = 2; say('ПЛАЗМОМЁТ! Клавиша 3'); }
+    it.taken = true; SFX.pickup();
+  }
+  items = items.filter(i => !i.taken);
+}
+
+// ---------------------------------------------------------------------
+//  РЕНДЕР
+// ---------------------------------------------------------------------
+function shade(c, f) {
+  if ((c >>> 24) === 254) return c | 0xff000000;
+  const r = (c & 255) * f, g = ((c >> 8) & 255) * f, b = ((c >> 16) & 255) * f * 1.08;
+  return 0xff000000 | ((b > 255 ? 255 : b) << 16) | (g << 8) | r;
+}
+function fog(d) { return Math.max(0.12, Math.min(1, 1.25 - d * 0.085)); }
+
+function render() {
+  const half = H / 2;
+  // пол и потолок
+  const rx0 = P.dx - P.px, ry0 = P.dy - P.py, rx1 = P.dx + P.px, ry1 = P.dy + P.py;
+  const fd = TH.floor.d, cd = TH.ceil.d;
+  for (let y = half + 1; y < H; y++) {
+    const rowD = half / (y - half);
+    const sx = rowD * (rx1 - rx0) / W, sy = rowD * (ry1 - ry0) / W;
+    let fx = P.x + rowD * rx0, fy = P.y + rowD * ry0;
+    const f = fog(rowD), o1 = y * W, o2 = (H - y - 1) * W;
+    for (let x = 0; x < W; x++) {
+      const tx = (fx * TS) & 63, ty = (fy * TS) & 63, i = ty * TS + tx;
+      buf[o1 + x] = shade(fd[i], f);
+      buf[o2 + x] = shade(cd[i], f);
+      fx += sx; fy += sy;
+    }
+  }
+  // стены
+  for (let x = 0; x < W; x++) {
+    const cam = 2 * x / W - 1, rdx = P.dx + P.px * cam, rdy = P.dy + P.py * cam;
+    let mx = Math.floor(P.x), my = Math.floor(P.y);
+    const ddx = Math.abs(1 / rdx), ddy = Math.abs(1 / rdy);
+    const stx = rdx < 0 ? -1 : 1, sty = rdy < 0 ? -1 : 1;
+    let sdx = (rdx < 0 ? P.x - mx : mx + 1 - P.x) * ddx, sdy = (rdy < 0 ? P.y - my : my + 1 - P.y) * ddy;
+    let side = 0, dist = 30, tex = null, u = 0, guard = 0;
+    while (guard++ < 64) {
+      if (sdx < sdy) { sdx += ddx; mx += stx; side = 0; } else { sdy += ddy; my += sty; side = 1; }
+      const ch = cellAt(mx, my);
+      if (!WALLS.includes(ch)) continue;
+      const door = doors[my * MW + mx];
+      if (door) {
+        const d = side === 0 ? (mx - P.x + (1 - stx) / 2 + stx * 0.5) / rdx : (my - P.y + (1 - sty) / 2 + sty * 0.5) / rdy;
+        if (d > Math.min(sdx, sdy)) continue;
+        let w = side === 0 ? P.y + d * rdy : P.x + d * rdx; w -= Math.floor(w);
+        if (w < door.open) continue;
+        dist = d; u = w - door.open; tex = door.lock === 'r' ? T.doorR : door.lock === 'b' ? T.doorB : T.door;
+        break;
+      }
+      dist = side === 0 ? sdx - ddx : sdy - ddy;
+      u = side === 0 ? P.y + dist * rdy : P.x + dist * rdx; u -= Math.floor(u);
+      // косяк рядом с дверью
+      const prev = doors[(my - (side ? sty : 0)) * MW + (mx - (side ? 0 : stx))];
+      tex = ch === '%' ? TH.tech : ch === 'W' ? TH.window : ch === '!' ? TH.hazard : ch === 'E' ? T.exit : ((mx * 7 + my * 3) % 5 === 0 ? TH.panel2 : TH.panel);
+      if (prev) tex = TH.panel2;
+      if ((side === 0 && rdx > 0) || (side === 1 && rdy < 0)) u = 1 - u;
+      break;
+    }
+    zbuf[x] = dist;
+    if (!tex) continue;
+    const lineH = H / dist, top = half - lineH / 2;
+    const y0 = Math.max(0, top | 0), y1 = Math.min(H, (half + lineH / 2) | 0);
+    const tx = Math.min(63, (u * TS) | 0), f = fog(dist) * (side ? 0.78 : 1), td = tex.d;
+    const step = TS / lineH;
+    let tpos = (y0 - top) * step;
+    for (let y = y0; y < y1; y++) { buf[y * W + x] = shade(td[((tpos | 0) & 63) * TS + tx], f); tpos += step; }
+  }
+  // спрайты
+  const list = [];
+  for (const e of enemies) {
+    e.vis = false;
+    const t = ETYPES[e.t];
+    list.push({ x: e.x, y: e.y, tex: e.dead ? t.dead : eFrame(e), scale: e.dead ? (e.t === 'X' ? 1.2 : 0.8) : t.scale, lift: 0, ref: e.dead ? null : e });
+  }
+  for (const it of items) { const I = ITEMS[it.k]; list.push({ x: it.x, y: it.y, tex: I.tex, scale: I.scale, lift: I.lift || 0 }); }
+  for (const s of shots) list.push({ x: s.x, y: s.y, tex: s.tex, scale: s.mine ? 0.3 : 0.2, lift: s.lift || 0.38, glow: true });
+  for (const fx of effects) list.push({ x: fx.x, y: fx.y, tex: (fx.mist ? MIST : BOOM)[Math.min(3, fx.t / 0.1 | 0)], scale: fx.scale, lift: 0.1, glow: true });
+  const inv = 1 / (P.px * P.dy - P.dx * P.py);
+  for (const s of list) { const rx = s.x - P.x, ry = s.y - P.y; s.tx = inv * (P.dy * rx - P.dx * ry); s.ty = inv * (-P.py * rx + P.px * ry); }
+  list.sort((a, b) => b.ty - a.ty);
+  for (const s of list) {
+    if (s.ty < 0.15) continue;
+    const sx = (W / 2) * (1 + s.tx / s.ty), unit = H / s.ty;
+    const h = unit * s.scale, w = h * s.tex.w / s.tex.h;
+    const bottom = half + unit / 2 - s.lift * unit, top = bottom - h, left = sx - w / 2;
+    const x0 = Math.max(0, left | 0), x1 = Math.min(W, (left + w) | 0);
+    const y0 = Math.max(0, top | 0), y1 = Math.min(H, bottom | 0);
+    const f = s.glow ? 1 : fog(s.ty), td = s.tex.d, tw = s.tex.w, th = s.tex.h;
+    for (let x = x0; x < x1; x++) {
+      if (s.ty >= zbuf[x]) continue;
+      if (s.ref) { s.ref.vis = true; }
+      const tx = ((x - left) * tw / w) | 0;
+      for (let y = y0; y < y1; y++) {
+        const c = td[(((y - top) * th / h) | 0) * tw + tx];
+        if ((c >>> 24) < 128) continue;
+        buf[y * W + x] = shade(c, f);
+      }
+    }
+    if (s.ref) { s.ref.sx = sx; s.ref.sw = w; s.ref.depth = s.ty; }
+  }
+  ctx.putImageData(frame, 0, 0);
+
+  // оружие
+  const g = GUNS[P.wpn];
+  const moving = keys.KeyW || keys.KeyS || keys.KeyA || keys.KeyD || keys.ArrowUp || keys.ArrowDown;
+  const bx = moving ? Math.sin(P.bob) * 6 : 0, by = moving ? Math.abs(Math.cos(P.bob)) * 6 : 0;
+  const kick = P.flash > 0 ? 6 : 0;
+  const gx = W / 2 - 80 + bx, gy = H - 108 + by + kick;
+  if (P.flash > 0) ctx.drawImage(P.wpn === 2 ? FLASH_B : FLASH, gx, gy - 30);
+  ctx.drawImage(g.img, gx, gy);
+
+  if (showMap) drawMap();
+}
+
+function drawMap() {
+  const s = Math.min(8, (H - 20) / MH, (W - 20) / MW), ox = 10, oy = 10;
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = '#000'; ctx.fillRect(ox - 2, oy - 2, MW * s + 4, MH * s + 4);
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+    const ch = map[y][x];
+    if (!WALLS.includes(ch)) continue;
+    const d = doors[y * MW + x];
+    ctx.fillStyle = d ? (d.lock === 'r' ? '#ff3030' : d.lock === 'b' ? '#3a7bff' : '#c9a020') : ch === 'E' ? '#39ff8a' : '#5a6272';
+    ctx.fillRect(ox + x * s, oy + y * s, s, s);
+  }
+  for (const it of items) { ctx.fillStyle = it.k === 'r' ? '#ff3030' : it.k === 'b' ? '#3a7bff' : '#39ff8a'; ctx.fillRect(ox + it.x * s - 1, oy + it.y * s - 1, 2, 2); }
+  for (const e of enemies) if (!e.dead && e.alert) { ctx.fillStyle = '#ff5050'; ctx.fillRect(ox + e.x * s - 1.5, oy + e.y * s - 1.5, 3, 3); }
+  ctx.fillStyle = '#ffd23a'; ctx.beginPath(); ctx.arc(ox + P.x * s, oy + P.y * s, 2.5, 0, 7); ctx.fill();
+  ctx.strokeStyle = '#ffd23a'; ctx.beginPath(); ctx.moveTo(ox + P.x * s, oy + P.y * s); ctx.lineTo(ox + (P.x + P.dx * 1.5) * s, oy + (P.y + P.dy * 1.5) * s); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// Портрет пилота в панели (меняется от здоровья)
+const fctx = $('faceC').getContext('2d');
+function drawFace() {
+  const hp = P.hp, g = fctx;
+  g.fillStyle = '#111318'; g.fillRect(0, 0, 24, 24);
+  g.fillStyle = '#d8dce4'; g.fillRect(4, 3, 16, 18);          // шлем
+  g.fillStyle = '#ff8a20'; g.fillRect(4, 6, 16, 2);            // полоса
+  g.fillStyle = hp > 30 ? '#2a3a55' : '#552a2a'; g.fillRect(6, 9, 12, 7); // визор
+  g.fillStyle = '#e8b890'; g.fillRect(8, 11, 8, 4);            // лицо
+  g.fillStyle = '#000'; const look = Math.sin(performance.now() / 900) > 0.6 ? 1 : 0;
+  g.fillRect(9 + look, 12, 1, 1); g.fillRect(14 + look, 12, 1, 1);
+  if (hp < 60) { g.fillStyle = '#b02020'; g.fillRect(16, 10, 2, 2); }
+  if (hp < 30) { g.fillStyle = '#b02020'; g.fillRect(7, 17, 3, 2); g.fillRect(13, 4, 2, 2); }
+  g.fillStyle = '#9aa3b5'; g.fillRect(4, 18, 16, 3);
+}
+
+function updateHUD() {
+  $('hHp').textContent = Math.ceil(P.hp) + '%';
+  $('hHp').style.color = P.hp > 30 ? '#ff4b3a' : (Math.sin(performance.now() / 120) > 0 ? '#ff4b3a' : '#ffffff');
+  $('hAmmo').textContent = P.wpn === 0 ? '∞' : P.wpn === 1 ? P.rifle : P.cells;
+  const sp = $('hWpn').children;
+  for (let i = 0; i < 3; i++) sp[i].className = (P.has[i] ? 'has' : '') + (P.wpn === i ? ' cur' : '');
+  $('kR').classList.toggle('on', P.keys.r); $('kB').classList.toggle('on', P.keys.b);
+  $('hKills').textContent = `Легион: ${kills}/${totalEnemies}`;
+  drawFace();
+}
+
+// ---------------------------------------------------------------------
+//  ЭКРАНЫ
+// ---------------------------------------------------------------------
+const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+function levelDone() {
+  state = 'between';
+  document.exitPointerLock && document.exitPointerLock();
+  const last = levelIdx === LEVELS.length - 1;
+  $('bTitle').textContent = last ? 'ПОБЕДА! СТАНЦИЯ СВОБОДНА' : 'УРОВЕНЬ ПРОЙДЕН';
+  $('bStats').innerHTML = `${LEVELS[levelIdx].name}<br>Легионеров повержено: ${kills} из ${totalEnemies} (${Math.round(kills / Math.max(1, totalEnemies) * 100)}%)<br>Время: ${fmt(levelTime)}<br>Здоровье: ${Math.ceil(P.hp)}%`;
+  $('nextBtn').textContent = last ? 'ИГРАТЬ СНОВА' : 'СЛЕДУЮЩИЙ УРОВЕНЬ';
+  $('between').classList.remove('hidden');
+}
+function showDead() {
+  document.exitPointerLock && document.exitPointerLock();
+  setTimeout(() => {
+    $('bTitle').textContent = 'ТЫ ПОДБИТ!';
+    $('bStats').innerHTML = `Уровень ${levelIdx + 1}: ${LEVELS[levelIdx].name}<br>Попробуй ещё раз — уровень начнётся заново.`;
+    $('nextBtn').textContent = 'ЗАНОВО';
+    $('between').classList.remove('hidden');
+  }, 900);
+}
+$('nextBtn').onclick = () => {
+  $('between').classList.add('hidden');
+  if (state === 'dead') restartLevel();
+  else if (levelIdx === LEVELS.length - 1) { newGame(); return; }
+  else { levelIdx++; P.hp = Math.max(P.hp, 50); loadLevel(levelIdx); }
+  state = 'play'; cv.requestPointerLock && cv.requestPointerLock();
+};
+function newGame() {
+  Object.assign(P, { hp: 100, rifle: 0, cells: 0, has: [true, false, false], wpn: 0 });
+  levelIdx = 0; loadLevel(0); state = 'play';
+}
+$('startBtn').onclick = () => { initAudio(); $('menu').classList.add('hidden'); newGame(); cv.requestPointerLock && cv.requestPointerLock(); };
+
+// ---------------------------------------------------------------------
+//  ГЛАВНЫЙ ЦИКЛ
+// ---------------------------------------------------------------------
+loadLevel(0); $('msg').textContent = ''; msgT = 0;
+let last = performance.now();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  if (state === 'play') {
+    levelTime += dt;
+    P.cd -= dt; P.flash -= dt;
+    movePlayer(dt);
+    if (mouseDown || keys.Space) fire();
+    updateDoors(dt); updateEnemies(dt); updateShots(dt); updateItems();
+    for (const fx of effects) fx.t += dt;
+    effects = effects.filter(f => f.t < 0.4);
+  } else if (state === 'menu') {
+    rotate(dt * 0.15);
+  }
+  const fl = $('flash'); fl.style.opacity = Math.max(0, parseFloat(fl.style.opacity || 0) - dt * 2);
+  if (msgT > 0) { msgT -= dt; if (msgT <= 0) $('msg').textContent = ''; }
+  render();
+  updateHUD();
+}
+requestAnimationFrame(loop);
+window.__g = { P, get enemies() { return enemies; }, get state() { return state; }, LEVELS, keys, loadLevel: (i) => { levelIdx = i; loadLevel(i); }, damage };
+</script>
+</body>
+</html>
